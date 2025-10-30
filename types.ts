@@ -37,6 +37,7 @@ export interface UserData {
     name: string;
     phone: string;
   };
+  chatHistory: ChatMessage[];
 }
 
 export interface JournalEntry {

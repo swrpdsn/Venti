@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { ChatMessage } from '../types';
 import { getAIResponse } from '../services/geminiService';
@@ -9,10 +10,8 @@ import { AppContextType } from '../types';
 
 const AIChatScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { userData, setShowSOS } = context;
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { role: 'model', text: `Hi ${userData?.name || 'there'}, I'm here to listen. What's on your mind today?` }
-    ]);
+    const { userData, setUserData, setShowSOS } = context;
+
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -21,20 +20,31 @@ const AIChatScreen: React.FC = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
-    useEffect(scrollToBottom, [messages]);
+    useEffect(() => {
+        if (userData && userData.chatHistory.length === 0) {
+            setUserData(prev => ({
+                ...prev,
+                chatHistory: [{ role: 'model', text: `Hi ${userData?.name || 'there'}, I'm here to listen. What's on your mind today?` }]
+            }));
+        }
+    }, [userData, setUserData]);
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [userData?.chatHistory]);
 
     const handleSend = async () => {
         if (input.trim() === '' || isLoading || !userData) return;
 
         const userMessage: ChatMessage = { role: 'user', text: input };
-        const newMessages = [...messages, userMessage];
-        setMessages(newMessages);
+        const updatedHistory = [...userData.chatHistory, userMessage];
+        setUserData(prev => ({ ...prev, chatHistory: updatedHistory }));
         
         const currentInput = input;
         setInput('');
         setIsLoading(true);
 
-        const aiResponseText = await getAIResponse(currentInput, messages, userData);
+        const aiResponseText = await getAIResponse(currentInput, updatedHistory, userData);
         
         const sosTrigger = '[TRIGGER_SOS]';
         let cleanResponse = aiResponseText;
@@ -45,9 +55,14 @@ const AIChatScreen: React.FC = () => {
         }
 
         const aiMessage: ChatMessage = { role: 'model', text: cleanResponse };
-        setMessages(prev => [...prev, aiMessage]);
+        setUserData(prev => ({
+            ...prev,
+            chatHistory: [...prev.chatHistory, aiMessage]
+        }));
         setIsLoading(false);
     };
+    
+    const messages = userData?.chatHistory || [];
 
     return (
         <div className="flex flex-col h-full bg-slate-100 rounded-lg">

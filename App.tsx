@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, createContext, useMemo, useEffect } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { UserData, Screen, AppContextType } from './types';
@@ -33,6 +34,7 @@ export const initialUserData: UserData = {
   moods: [],
   streaks: { noContact: 0, journaling: 0, selfCare: 0 },
   emergencyContact: { name: '', phone: '' },
+  chatHistory: [],
 };
 
 export const AppContext = createContext<AppContextType | null>(null);
