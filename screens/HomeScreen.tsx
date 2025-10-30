@@ -1,8 +1,10 @@
 
 
+
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../App';
 import { AppContextType, MoodEntry, Program } from '../types';
+import Card from '../components/Card';
 
 interface ProgramTask {
     title: string;
@@ -210,19 +212,5 @@ const HomeScreen: React.FC = () => {
         </div>
     );
 }
-
-const Card: React.FC<{children: React.ReactNode}> = ({ children }) => {
-    const isDawn = document.body.parentElement?.classList.contains('theme-dawn');
-    const cardClass = isDawn 
-      ? 'bg-white/70 border-white/20' 
-      : 'bg-slate-800/40 border-white/10';
-
-    return (
-        <div className={`p-4 rounded-xl shadow-md backdrop-blur-sm border transition-colors duration-500 ${cardClass}`}>
-            {children}
-        </div>
-    );
-};
-
 
 export default HomeScreen;

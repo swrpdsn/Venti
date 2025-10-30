@@ -41,7 +41,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialData }) => {
     switch(step) {
       case 1: return <WelcomeScreen name={data.name} onNameChange={handleInputChange} />;
       case 2: return <ConsentScreen />;
-      case 3: return <BreakupContextScreen data={data.breakupContext} setData={setData} />;
+      case 3: return <BreakupContextScreen data={data.breakupContext} onChange={handleInputChange} />;
       case 4: return <ExNameScreen exName={data.exName} onExNameChange={handleInputChange} />;
       case 5: return <ReleaseThoughtScreen onComplete={nextStep} />;
       case 6: return <ShieldListScreen list={data.shieldList} onChange={handleShieldListChange} />;
@@ -107,8 +107,7 @@ const ConsentScreen: React.FC = () => (
     </div>
 );
 
-const BreakupContextScreen: React.FC<{ data: UserData['breakupContext'], setData: React.Dispatch<React.SetStateAction<UserData>> }> = ({ data, setData }) => {
-    // A simplified form for brevity
+const BreakupContextScreen: React.FC<{ data: UserData['breakupContext'], onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void }> = ({ data, onChange }) => {
     return (
         <div>
             <h2 className="text-2xl font-bold mb-4">Tell Us a Little More</h2>
@@ -116,7 +115,7 @@ const BreakupContextScreen: React.FC<{ data: UserData['breakupContext'], setData
             <textarea
                 name="breakupContext.reason"
                 value={data.reason}
-                onChange={(e) => setData(prev => ({...prev, breakupContext: {...prev.breakupContext, reason: e.target.value}}))}
+                onChange={onChange}
                 placeholder="In your words, why did it end?"
                 className="w-full bg-white/20 border-2 border-transparent focus:border-white focus:ring-0 rounded-lg p-3 text-white placeholder-white/70 h-32"
             />

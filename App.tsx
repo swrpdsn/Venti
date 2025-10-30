@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, createContext, useMemo, useEffect } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import { UserData, Screen, AppContextType } from './types';
@@ -17,7 +18,7 @@ import CommunityStoriesScreen from './screens/CommunityStoriesScreen';
 import MyStoriesScreen from './screens/MyStoriesScreen';
 import StoryEditorScreen from './screens/StoryEditorScreen';
 import LandingScreen from './screens/LandingScreen';
-import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, LightbulbIcon, SOSIcon, ChevronLeftIcon } from './components/Icons';
+import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon } from './components/Icons';
 
 export const initialUserData: UserData = {
   name: '',
@@ -153,7 +154,7 @@ const Header: React.FC = () => {
     <header className="grid grid-cols-3 items-center p-4 bg-transparent sticky top-0 z-10">
       <div className="justify-self-start">
         {!isTabScreen && (
-          <button onClick={goBack} className={`p-2 rounded-full ${buttonBg} transition-colors`}>
+          <button onClick={goBack} className={`p-2 rounded-full ${buttonBg} transition-colors`} aria-label="Go back">
             <ChevronLeftIcon className={`w-6 h-6 ${textColor}`} />
           </button>
         )}
@@ -164,7 +165,9 @@ const Header: React.FC = () => {
       <div className="justify-self-end">
         <button 
           onClick={() => setShowSOS(true)}
-          className="bg-red-500 text-white px-3 py-1.5 rounded-full font-bold flex items-center space-x-1.5 shadow-md hover:bg-red-600 transition-colors">
+          className="bg-red-500 text-white px-3 py-1.5 rounded-full font-bold flex items-center space-x-1.5 shadow-md hover:bg-red-600 transition-colors"
+          aria-label="Open crisis support menu"
+          >
           <SOSIcon className="w-5 h-5" />
           <span>SOS</span>
         </button>
@@ -182,7 +185,7 @@ const BottomNav: React.FC = () => {
     { screen: 'home', label: 'Home', icon: HomeIcon },
     { screen: 'journal', label: 'Journal', icon: JournalIcon },
     { screen: 'chat', label: 'AI Chat', icon: ChatIcon },
-    { screen: 'learn', label: 'Learn', icon: LightbulbIcon },
+    { screen: 'programs', label: 'Program', icon: ProgramsIcon },
     { screen: 'more', label: 'More', icon: MoreIcon },
   ];
   

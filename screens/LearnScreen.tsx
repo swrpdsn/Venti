@@ -1,6 +1,9 @@
 
+
+
 import React, { useState } from 'react';
 import { ChevronRightIcon } from '../components/Icons';
+import Card from '../components/Card';
 
 interface LearnTopic {
     title: string;
@@ -32,29 +35,36 @@ const LearnScreen: React.FC = () => {
     const toggleTopic = (index: number) => {
         setOpenTopic(openTopic === index ? null : index);
     };
+    
+    const isDawn = document.documentElement.classList.contains('theme-dawn');
+    const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
+    const subTextColor = isDawn ? 'text-slate-600' : 'text-slate-400';
+    const iconColor = isDawn ? 'text-dawn-primary' : 'text-dusk-primary';
+    const topicContentBg = isDawn ? 'bg-slate-100/50' : 'bg-slate-900/50';
+    const topicBorder = isDawn ? 'border-slate-200' : 'border-slate-700';
 
     return (
-        <div className="space-y-4">
-             <div className="p-4 bg-white rounded-xl shadow text-center">
-                <h2 className="text-2xl font-bold text-brand-deep-purple">Healing Insights</h2>
-                <p className="text-slate-600 mt-1">Understanding the 'why' behind your feelings is a superpower.</p>
-            </div>
+        <div className="space-y-4 animate-fade-in">
+             <Card className="p-4 text-center">
+                <h2 className={`text-2xl font-bold ${textColor}`}>Healing Insights</h2>
+                <p className={`${subTextColor} mt-1`}>Understanding the 'why' behind your feelings is a superpower.</p>
+            </Card>
             <div className="space-y-2">
                 {topics.map((topic, index) => (
-                    <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden">
+                    <Card key={index} className="overflow-hidden p-0">
                         <button
                             onClick={() => toggleTopic(index)}
                             className="w-full text-left p-4 flex justify-between items-center"
                         >
-                            <h3 className="font-bold text-brand-deep-purple">{topic.title}</h3>
-                            <ChevronRightIcon className={`w-6 h-6 text-brand-purple transition-transform ${openTopic === index ? 'rotate-90' : ''}`} />
+                            <h3 className={`font-bold ${textColor}`}>{topic.title}</h3>
+                            <ChevronRightIcon className={`w-6 h-6 ${iconColor} transition-transform ${openTopic === index ? 'rotate-90' : ''}`} />
                         </button>
                         {openTopic === index && (
-                            <div className="p-4 bg-brand-light-gray/50 border-t border-slate-200">
-                                <p className="text-brand-text leading-relaxed">{topic.content}</p>
+                            <div className={`p-4 ${topicContentBg} border-t ${topicBorder}`}>
+                                <p className={`${textColor} leading-relaxed`}>{topic.content}</p>
                             </div>
                         )}
-                    </div>
+                    </Card>
                 ))}
             </div>
         </div>

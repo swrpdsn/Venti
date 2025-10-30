@@ -1,4 +1,5 @@
 
+
 import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../App';
 import { AppContextType } from '../types';
@@ -23,7 +24,7 @@ const SOSScreen: React.FC = () => {
 
     return (
         <div className="fixed inset-0 bg-brand-deep-purple text-white z-50 flex flex-col p-4">
-            <button onClick={() => setShowSOS(false)} className="self-end p-2 rounded-full hover:bg-white/20">
+            <button onClick={() => setShowSOS(false)} className="self-end p-2 rounded-full hover:bg-white/20" aria-label="Close crisis support">
                 <CloseIcon className="w-8 h-8" />
             </button>
             <div className="flex-1 flex flex-col items-center justify-center text-center">

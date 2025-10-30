@@ -72,7 +72,8 @@ export interface CommunityChatMessage {
 }
 
 export interface AppContextType {
-    userData: UserData | null;
+    // Fix: Changed userData to be non-nullable to match the state from useLocalStorage and resolve spread operator type errors.
+    userData: UserData;
     setUserData: Dispatch<SetStateAction<UserData>>;
     activeScreen: Screen;
     navigationStack: Screen[];

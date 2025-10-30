@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
 import { AppContextType, MyStory } from '../types';
 import { TrashIcon, ShareIcon } from '../components/Icons';
+import Card from '../components/Card';
 
 const StoryEditorScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
@@ -59,54 +60,61 @@ const StoryEditorScreen: React.FC = () => {
     const handleShare = () => {
         const subject = `My Venti Story: ${story.title}`;
         const body = story.content;
-        const mailtoLink = `mailto:stories@venti-app.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body || '')}`;
+        const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body || '')}`;
         window.location.href = mailtoLink;
     }
 
     const title = activeStoryId ? "Edit Story" : "New Story";
+    const isDawn = document.documentElement.classList.contains('theme-dawn');
+    const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
+    const inputClass = `w-full p-3 border rounded-md focus:ring-2 focus:border-transparent ${isDawn ? 'bg-white border-slate-300 focus:ring-dawn-primary' : 'bg-slate-900/50 border-slate-700 text-dusk-text focus:ring-dusk-primary'}`;
+    const buttonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
+    const shareButtonColor = isDawn ? 'text-dawn-secondary' : 'text-dusk-secondary';
 
     return (
-        <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-center text-brand-deep-purple">{title}</h2>
-            <div className="bg-white p-4 rounded-xl shadow-md space-y-4">
-                <input
-                    type="text"
-                    value={story.title}
-                    onChange={(e) => setStory(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="Give your story a title..."
-                    className="w-full p-3 border border-slate-300 rounded-md text-lg font-semibold focus:ring-2 focus:ring-brand-purple focus:border-transparent"
-                />
-                <textarea
-                    value={story.content}
-                    onChange={(e) => setStory(prev => ({ ...prev, content: e.target.value }))}
-                    placeholder="Write what's on your heart..."
-                    className="w-full h-64 p-3 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-purple focus:border-transparent resize-none"
-                />
-                <button
-                    onClick={handleSave}
-                    className="w-full bg-brand-purple text-white font-bold py-3 px-4 rounded-lg hover:bg-brand-deep-purple transition-colors"
-                >
-                    Save Story
-                </button>
-                {activeStoryId && (
-                    <div className="flex items-center justify-center space-x-4 pt-2">
-                        <button
-                            onClick={handleShare}
-                            className="flex items-center space-x-2 text-brand-purple font-semibold hover:underline"
-                        >
-                            <ShareIcon className="w-5 h-5"/>
-                            <span>Share via Email</span>
-                        </button>
-                         <button
-                            onClick={handleDelete}
-                            className="flex items-center space-x-2 text-red-600 font-semibold hover:underline"
-                        >
-                            <TrashIcon className="w-5 h-5"/>
-                            <span>Delete</span>
-                        </button>
-                    </div>
-                )}
-            </div>
+        <div className="space-y-4 animate-fade-in">
+            <h2 className={`text-2xl font-bold text-center ${textColor}`}>{title}</h2>
+            <Card>
+                <div className="space-y-4">
+                    <input
+                        type="text"
+                        value={story.title}
+                        onChange={(e) => setStory(prev => ({ ...prev, title: e.target.value }))}
+                        placeholder="Give your story a title..."
+                        className={`${inputClass} text-lg font-semibold`}
+                    />
+                    <textarea
+                        value={story.content}
+                        onChange={(e) => setStory(prev => ({ ...prev, content: e.target.value }))}
+                        placeholder="Write what's on your heart..."
+                        className={`${inputClass} h-64 resize-none`}
+                    />
+                    <button
+                        onClick={handleSave}
+                        className={`w-full font-bold py-3 px-4 rounded-lg transition-colors ${buttonClass}`}
+                    >
+                        Save Story
+                    </button>
+                    {activeStoryId && (
+                        <div className="flex items-center justify-center space-x-4 pt-2">
+                            <button
+                                onClick={handleShare}
+                                className={`flex items-center space-x-2 ${shareButtonColor} font-semibold hover:underline`}
+                            >
+                                <ShareIcon className="w-5 h-5"/>
+                                <span>Share</span>
+                            </button>
+                             <button
+                                onClick={handleDelete}
+                                className="flex items-center space-x-2 text-red-500 font-semibold hover:underline"
+                            >
+                                <TrashIcon className="w-5 h-5"/>
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </Card>
         </div>
     );
 };
