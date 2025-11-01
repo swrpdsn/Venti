@@ -13,7 +13,7 @@ const MyStoriesScreen: React.FC = () => {
         navigateTo('story-editor');
     };
 
-    const handleSelectStory = (id: string) => {
+    const handleSelectStory = (id: number) => {
         setActiveStoryId(id);
         navigateTo('story-editor');
     };
@@ -53,7 +53,7 @@ const MyStoriesScreen: React.FC = () => {
                             >
                                 <div>
                                     <p className={`font-semibold ${textColor}`}>{story.title}</p>
-                                    <p className={`text-sm ${subTextColor}`}>Last updated: {new Date(story.date).toLocaleDateString()}</p>
+                                    <p className={`text-sm ${subTextColor}`}>Last updated: {new Date(story.updated_at).toLocaleDateString()}</p>
                                 </div>
                                 <ChevronRightIcon className={`w-5 h-5 ${subTextColor}`} />
                             </button>

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { UserData } from '../types';
+import { UserData, UserProfile } from '../types';
 import { ChevronLeftIcon, ChevronRightIcon } from './Icons';
 
 interface OnboardingProps {
-  onComplete: (data: UserData) => void;
+  onComplete: (data: UserProfile) => void;
   initialData: UserData;
 }
 
@@ -53,7 +53,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialData }) => {
 
   const handleFinish = () => {
     if(data.program) {
-        onComplete(data);
+        const { journalEntries, moods, myStories, chatHistory, ...profileData } = data;
+        onComplete(profileData);
     } else {
         alert("Please select a program to start.");
     }
@@ -99,7 +100,7 @@ const ConsentScreen: React.FC = () => (
     <div className="text-center flex flex-col justify-center h-full">
         <h2 className="text-2xl font-bold mb-4">Your Privacy Matters</h2>
         <ul className="text-left space-y-3 text-brand-light-purple list-disc list-inside mb-6">
-            <li>Your journal is private and stored on your device.</li>
+            <li>Your data is securely stored and never shared.</li>
             <li>We don't show you ads or sell your data.</li>
             <li>You can export or delete your data anytime.</li>
         </ul>

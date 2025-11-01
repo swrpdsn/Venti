@@ -1,10 +1,11 @@
 
 
-
-
 import React, { useState, createContext, useMemo, useEffect } from 'react';
-import useLocalStorage from './hooks/useLocalStorage';
-import { UserData, Screen, AppContextType } from './types';
+import { UserData, Screen, AppContextType, UserProfile } from './types';
+import type { Session, User } from '@supabase/supabase-js';
+import { supabase } from './services/supabaseClient';
+import { getFullUserData } from './services/dataService';
+
 import Onboarding from './components/Onboarding';
 import HomeScreen from './screens/HomeScreen';
 import JournalScreen from './screens/JournalScreen';
@@ -17,12 +18,16 @@ import CommunityChatScreen from './screens/CommunityChatScreen';
 import CommunityStoriesScreen from './screens/CommunityStoriesScreen';
 import MyStoriesScreen from './screens/MyStoriesScreen';
 import StoryEditorScreen from './screens/StoryEditorScreen';
-import LandingScreen from './screens/LandingScreen';
-import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon } from './components/Icons';
+import AuthScreen from './screens/AuthScreen';
+import LoadingScreen from './components/Loading';
+import AdminDashboardScreen from './screens/AdminDashboardScreen';
+import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon, ShieldIcon } from './components/Icons';
 
-export const initialUserData: UserData = {
+export const initialUserProfile: Omit<UserProfile, 'id'> = {
   name: '',
+  role: 'user',
   onboardingComplete: false,
+  anonymous_display_name: null,
   breakupContext: { role: '', initiator: '', reason: '', redFlags: '', feelings: [] },
   exName: '',
   shieldList: ['', '', '', '', ''],
@@ -30,23 +35,21 @@ export const initialUserData: UserData = {
   program: null,
   programDay: 1,
   lastTaskCompletedDate: null,
-  journalEntries: [],
-  myStories: [],
-  moods: [],
   streaks: { noContact: 0, journaling: 0, selfCare: 0 },
   emergencyContact: { name: '', phone: '' },
-  chatHistory: [],
 };
 
 export const AppContext = createContext<AppContextType | null>(null);
 
 const App: React.FC = () => {
-  const [userData, setUserData] = useLocalStorage<UserData>('venti-user-data', initialUserData);
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+
   const [navigationStack, setNavigationStack] = useState<Screen[]>(['home']);
   const [showSOS, setShowSOS] = useState<boolean>(false);
-  const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
+  const [activeStoryId, setActiveStoryId] = useState<number | null>(null);
   const [theme, setTheme] = useState('theme-dusk');
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -54,6 +57,50 @@ const App: React.FC = () => {
     setTheme(currentTheme);
     document.documentElement.className = currentTheme;
   }, []);
+
+  useEffect(() => {
+    const fetchAndSetUserData = async (user: User) => {
+        const fullData = await getFullUserData(user.id);
+        if (fullData) {
+            setUserData(fullData);
+        } else if (session?.user) { // New user, profile was just created or fetch failed
+            const newUserProfile: UserData = {
+                ...initialUserProfile,
+                id: session.user.id,
+                name: session.user.email?.split('@')[0] || 'Friend',
+                journalEntries: [],
+                moods: [],
+                myStories: [],
+                chatHistory: [],
+            };
+            setUserData(newUserProfile);
+        }
+        setLoading(false);
+    }
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      if (session?.user) {
+        setLoading(true);
+        await fetchAndSetUserData(session.user);
+      } else {
+        setUserData(null);
+        setLoading(false);
+      }
+    });
+
+    // Check for initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) {
+            setLoading(false);
+        }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
 
   const activeScreen = navigationStack[navigationStack.length - 1];
 
@@ -71,71 +118,90 @@ const App: React.FC = () => {
     setNavigationStack([screen]);
   };
 
-  const contextValue = useMemo(() => ({
-    userData,
-    setUserData,
-    activeScreen,
-    navigationStack,
-    navigateTo,
-    goBack,
-    resetToScreen,
-    showSOS,
-    setShowSOS,
-    activeStoryId,
-    setActiveStoryId
-  }), [userData, setUserData, activeScreen, navigationStack, showSOS, setShowSOS, activeStoryId, setActiveStoryId]);
+  const handleOnboardingComplete = async (profileData: UserProfile) => {
+    const finalProfileData = { ...profileData, onboardingComplete: true };
+    const { error } = await supabase.from('profiles').upsert(finalProfileData);
 
-  const handleOnboardingComplete = (data: UserData) => {
-    setUserData({ ...data, onboardingComplete: true });
+    if (error) {
+        console.error("Error saving profile:", error);
+        alert("There was an issue saving your profile. Please try again.");
+    } else {
+        setUserData(prev => ({
+            ...prev,
+            ...finalProfileData
+        } as UserData));
+    }
   };
   
   const backgroundClass = theme === 'theme-dawn'
     ? 'bg-gradient-to-br from-dawn-bg-start to-dawn-bg-end'
     : 'bg-gradient-to-br from-dusk-bg-start to-dusk-bg-end';
 
-  if (!userData.onboardingComplete) {
-    if (showOnboarding) {
-        return <Onboarding onComplete={handleOnboardingComplete} initialData={initialUserData} />;
-    } else {
-        return (
-             <div className={`min-h-screen font-sans flex flex-col h-screen transition-colors duration-500 ${backgroundClass}`}>
-                <LandingScreen onBegin={() => setShowOnboarding(true)} />
-            </div>
-        );
-    }
+  if (loading) {
+      return <LoadingScreen />;
   }
 
-  const renderScreen = () => {
-    switch (activeScreen) {
-      case 'home': return <HomeScreen />;
-      case 'journal': return <JournalScreen />;
-      case 'chat': return <AIChatScreen />;
-      case 'programs': return <ProgramsScreen />;
-      case 'learn': return <LearnScreen />;
-      case 'more': return <MoreScreen />;
-      case 'community-chat': return <CommunityChatScreen />;
-      case 'community-stories': return <CommunityStoriesScreen />;
-      case 'my-stories': return <MyStoriesScreen />;
-      case 'story-editor': return <StoryEditorScreen />;
-      default: return <HomeScreen />;
-    }
-  };
+  if (!session) {
+    return <AuthScreen />;
+  }
+  
+  if (userData && !userData.onboardingComplete) {
+    return <Onboarding onComplete={handleOnboardingComplete} initialData={userData} />;
+  }
+  
+  if (session && userData && userData.onboardingComplete) {
+      // Main App View
+      const contextValue: AppContextType = {
+        session,
+        user: session.user,
+        userData,
+        setUserData,
+        activeScreen,
+        navigationStack,
+        navigateTo,
+        goBack,
+        resetToScreen,
+        showSOS,
+        setShowSOS,
+        activeStoryId,
+        setActiveStoryId
+      };
 
-  return (
-    <AppContext.Provider value={contextValue}>
-      <div className={`min-h-screen font-sans flex flex-col h-screen transition-colors duration-500 ${backgroundClass} ${theme}`}>
-        {showSOS && <SOSScreen />}
+      const renderScreen = () => {
+        switch (activeScreen) {
+          case 'home': return <HomeScreen />;
+          case 'journal': return <JournalScreen />;
+          case 'chat': return <AIChatScreen />;
+          case 'programs': return <ProgramsScreen />;
+          case 'learn': return <LearnScreen />;
+          case 'more': return <MoreScreen />;
+          case 'community-group-simulation': return <CommunityChatScreen />;
+          case 'community-stories': return <CommunityStoriesScreen />;
+          case 'my-stories': return <MyStoriesScreen />;
+          case 'story-editor': return <StoryEditorScreen />;
+          case 'admin-dashboard': return <AdminDashboardScreen />;
+          default: return <HomeScreen />;
+        }
+      };
 
-        <Header />
-        
-        <main className="flex-1 overflow-y-auto p-4 pb-20">
-          {renderScreen()}
-        </main>
+      return (
+        <AppContext.Provider value={contextValue}>
+          <div className={`min-h-screen font-sans flex flex-col h-screen transition-colors duration-500 ${backgroundClass} ${theme}`}>
+            {showSOS && <SOSScreen />}
 
-        <BottomNav />
-      </div>
-    </AppContext.Provider>
-  );
+            <Header />
+            
+            <main className="flex-1 overflow-y-auto p-4 pb-20">
+              {renderScreen()}
+            </main>
+
+            <BottomNav />
+          </div>
+        </AppContext.Provider>
+      );
+  }
+
+  return <LoadingScreen />;
 };
 
 const Header: React.FC = () => {
@@ -143,7 +209,7 @@ const Header: React.FC = () => {
   if (!context) return null;
   const { setShowSOS, goBack, activeScreen } = context;
 
-  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more'].includes(activeScreen);
+  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more', 'admin-dashboard'].includes(activeScreen);
   const isDawn = document.documentElement.classList.contains('theme-dawn');
 
   const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
@@ -179,7 +245,7 @@ const Header: React.FC = () => {
 const BottomNav: React.FC = () => {
   const context = React.useContext(AppContext);
   if (!context) return null;
-  const { activeScreen, resetToScreen } = context;
+  const { activeScreen, resetToScreen, userData } = context;
 
   const navItems: { screen: Screen, label: string, icon: React.FC<React.SVGProps<SVGSVGElement>> }[] = [
     { screen: 'home', label: 'Home', icon: HomeIcon },
@@ -188,6 +254,11 @@ const BottomNav: React.FC = () => {
     { screen: 'programs', label: 'Program', icon: ProgramsIcon },
     { screen: 'more', label: 'More', icon: MoreIcon },
   ];
+
+  if (userData?.role === 'admin' || userData?.role === 'superadmin') {
+      const moreIndex = navItems.findIndex(item => item.screen === 'more');
+      navItems.splice(moreIndex, 0, { screen: 'admin-dashboard', label: 'Admin', icon: ShieldIcon });
+  }
   
   const isDawn = document.documentElement.classList.contains('theme-dawn');
   const baseBg = isDawn ? 'bg-white/80' : 'bg-slate-800/60';

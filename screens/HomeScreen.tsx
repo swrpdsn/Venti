@@ -1,10 +1,8 @@
-
-
-
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../App';
-import { AppContextType, MoodEntry, Program } from '../types';
+import { AppContextType, Program } from '../types';
 import Card from '../components/Card';
+import { addOrUpdateMood, updateProfile } from '../services/dataService';
 
 interface ProgramTask {
     title: string;
@@ -64,7 +62,7 @@ const HomeScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
     if (!context || !context.userData) return <div>Loading...</div>;
 
-    const { userData, setUserData } = context;
+    const { user, userData, setUserData } = context;
     const [mood, setMood] = useState(5);
     const [feedbackMessage, setFeedbackMessage] = useState('');
     
@@ -88,33 +86,60 @@ const HomeScreen: React.FC = () => {
         }, 3000);
     };
 
-    const addMoodEntry = () => {
-        const newEntry: MoodEntry = { date: today, mood };
+    const addMoodEntry = async () => {
+        if (!user) return;
+        const newEntry = { user_id: user.id, date: today, mood };
+        
+        // Optimistic UI update
         setUserData(prev => {
+            if (!prev) return null;
             const existingEntryIndex = prev.moods.findIndex(m => m.date === today);
             const newMoods = [...prev.moods];
             if (existingEntryIndex > -1) {
-                newMoods[existingEntryIndex] = newEntry;
+                newMoods[existingEntryIndex] = { ...newMoods[existingEntryIndex], ...newEntry };
             } else {
-                newMoods.push(newEntry);
+                // Mock an ID for the optimistic update
+                newMoods.push({ id: Date.now(), created_at: new Date().toISOString(), ...newEntry });
             }
             return { ...prev, moods: newMoods };
         });
+
+        const { data, error } = await addOrUpdateMood(newEntry);
+        if (error) {
+            showFeedback("Error logging mood. Please try again.");
+            // Revert optimistic update if needed
+        } else if (data) {
+            // Update local state with actual data from DB
+            setUserData(prev => {
+                if (!prev) return null;
+                const newMoods = prev.moods.map(m => (m.date === today ? data : m));
+                return { ...prev, moods: newMoods };
+            });
+        }
         showFeedback("Mood for today logged. Great job checking in!");
     };
     
-    const handleCompleteTask = () => {
-        if (isTaskCompletedToday) return;
-        setUserData(prev => ({
-            ...prev,
-            programDay: Math.min(30, prev.programDay + 1),
+    const handleCompleteTask = async () => {
+        if (isTaskCompletedToday || !user) return;
+
+        const updates = {
+            programDay: Math.min(30, userData.programDay + 1),
             lastTaskCompletedDate: today,
             streaks: {
-                ...prev.streaks,
-                selfCare: prev.streaks.selfCare + 1
+                ...userData.streaks,
+                selfCare: userData.streaks.selfCare + 1
             }
-        }));
+        };
+
+        setUserData(prev => prev ? ({ ...prev, ...updates }) : null);
         showFeedback("Task complete! One step forward.");
+
+        const { error } = await updateProfile(user.id, updates);
+        if (error) {
+            showFeedback("Error saving progress. Please try again.");
+            // Revert optimistic update
+             setUserData(prev => prev ? ({ ...prev, ...userData }) : null);
+        }
     }
     
     const isDawn = document.body.parentElement?.classList.contains('theme-dawn');

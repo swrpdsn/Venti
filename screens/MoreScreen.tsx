@@ -1,19 +1,17 @@
 
 
-
-
-
-
 import React, { useContext, useState } from 'react';
-import { AppContext, initialUserData } from '../App';
-import { AppContextType, UserData } from '../types';
+import { AppContext } from '../App';
+import { AppContextType, Program, UserData } from '../types';
 import { UsersIcon, BookOpenIcon, ChevronRightIcon, PencilIcon, LightbulbIcon } from '../components/Icons';
 import Card from '../components/Card';
+import { supabase } from '../services/supabaseClient';
+import { updateProfile } from '../services/dataService';
 
 
 const MoreScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { userData, setUserData, navigateTo } = context;
+    const { user, userData, setUserData, navigateTo } = context;
     const [isChangingProgram, setIsChangingProgram] = useState(false);
     const [feedbackMessage, setFeedbackMessage] = useState('');
 
@@ -25,16 +23,24 @@ const MoreScreen: React.FC = () => {
 
     const currentProgram = userData?.program ? programDetails[userData.program] : null;
 
-    const handleProgramSelect = (program: UserData['program']) => {
-        setUserData(prev => ({ ...prev, program, programDay: 1, lastTaskCompletedDate: null }));
+    const handleProgramSelect = async (program: Program | null) => {
+        if (!user || !userData) return;
+
+        const updates = { program, programDay: 1, lastTaskCompletedDate: null };
+        setUserData({ ...userData, ...updates });
         setIsChangingProgram(false);
         showFeedback("Program updated successfully!");
+
+        const { error } = await updateProfile(user.id, updates);
+        if (error) {
+            showFeedback("Error updating program.");
+            // Revert optimistic update
+            setUserData(userData);
+        }
     }
     
-    const handleResetAccount = () => {
-        if (window.confirm("Are you sure you want to delete your account? All your data will be permanently erased. This action cannot be undone.")) {
-            setUserData(initialUserData);
-        }
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
     };
     
     const showFeedback = (message: string) => {
@@ -85,7 +91,7 @@ const MoreScreen: React.FC = () => {
             <Card>
                 <h3 className={`font-bold ${textColor} mb-3`}>Community & Learning</h3>
                  <div className="divide-y divide-slate-200 dark:divide-slate-700">
-                    <SettingsItem label="AI Community Chat" Icon={UsersIcon} onClick={() => navigateTo('community-chat')} />
+                    <SettingsItem label="Community Group Simulation" Icon={UsersIcon} onClick={() => navigateTo('community-group-simulation')} />
                     <SettingsItem label="Community Stories" Icon={BookOpenIcon} onClick={() => navigateTo('community-stories')} />
                     <SettingsItem label="Healing Insights" Icon={LightbulbIcon} onClick={() => navigateTo('learn')} />
                 </div>
@@ -105,7 +111,7 @@ const MoreScreen: React.FC = () => {
                     <SettingsItem label="Notifications & Reminders" onClick={() => showFeedback('Feature coming soon!')} />
                     <SettingsItem label="App Lock (PIN/Biometric)" onClick={() => showFeedback('Feature coming soon!')} />
                     <SettingsItem label="Export My Data" onClick={() => showFeedback('Feature coming soon!')} />
-                    <SettingsItem label="Delete My Account" isDestructive={true} onClick={handleResetAccount} />
+                    <SettingsItem label="Log Out" onClick={handleLogout} />
                 </div>
             </Card>
         </div>
@@ -114,7 +120,7 @@ const MoreScreen: React.FC = () => {
 
 const EmergencyContact: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { userData, setUserData } = context;
+    const { user, userData, setUserData } = context;
     const [isEditing, setIsEditing] = useState(false);
     const [contact, setContact] = useState(userData?.emergencyContact || { name: '', phone: '' });
     
@@ -123,9 +129,17 @@ const EmergencyContact: React.FC = () => {
     const subTextColor = isDawn ? 'text-slate-500' : 'text-slate-400';
     const buttonTextColor = isDawn ? 'text-dawn-primary' : 'text-dusk-primary';
     
-    const handleSave = () => {
-        setUserData(prev => ({...prev, emergencyContact: contact }));
+    const handleSave = async () => {
+        if (!user || !userData) return;
+        
+        setUserData({ ...userData, emergencyContact: contact });
         setIsEditing(false);
+
+        const { error } = await updateProfile(user.id, { emergencyContact: contact });
+        if (error) {
+            alert('Could not save contact.');
+            setUserData(userData); // Revert
+        }
     };
 
     if (isEditing) {
@@ -169,7 +183,7 @@ const EmergencyContact: React.FC = () => {
     );
 };
 
-const ProgramChanger: React.FC<{currentProgram: UserData['program'], onSelect: (p: UserData['program']) => void, onCancel: () => void}> = ({ currentProgram, onSelect, onCancel }) => {
+const ProgramChanger: React.FC<{currentProgram: Program | null, onSelect: (p: Program | null) => void, onCancel: () => void}> = ({ currentProgram, onSelect, onCancel }) => {
     const programs = [
         { id: 'healing', title: 'Calm Healing', desc: 'Meditations and journaling.' },
         { id: 'glow-up', title: 'Glow-Up Challenge', desc: 'Fitness and self-care tasks.' },
@@ -182,7 +196,7 @@ const ProgramChanger: React.FC<{currentProgram: UserData['program'], onSelect: (
              {programs.map(p => (
                 <button 
                     key={p.id} 
-                    onClick={() => onSelect(p.id as UserData['program'])} 
+                    onClick={() => onSelect(p.id as Program)} 
                     className={`w-full text-left p-3 rounded-lg border-2 transition-colors
                      ${currentProgram === p.id 
                          ? (isDawn ? 'bg-dawn-secondary/20 border-dawn-secondary' : 'bg-dusk-primary/20 border-dusk-primary') 
@@ -210,7 +224,7 @@ const SettingsItem: React.FC<{ label: string, isDestructive?: boolean, onClick?:
                 {Icon && <Icon className={`w-6 h-6 ${isDestructive ? 'text-red-500' : iconColor}`}/>}
                 <span className={`font-semibold ${textColor}`}>{label}</span>
             </div>
-            <ChevronRightIcon className={`w-5 h-5 ${isDawn ? 'text-slate-400' : 'text-slate-500'}`} />
+            {!isDestructive && <ChevronRightIcon className={`w-5 h-5 ${isDawn ? 'text-slate-400' : 'text-slate-500'}`} />}
         </button>
     );
 };

@@ -1,12 +1,17 @@
 // Fix: Import types from React to resolve namespace errors.
 import type { Dispatch, SetStateAction } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
 
-export type Screen = 'home' | 'journal' | 'chat' | 'programs' | 'sos' | 'more' | 'community-chat' | 'community-stories' | 'my-stories' | 'story-editor' | 'learn';
+export type Screen = 'home' | 'journal' | 'chat' | 'programs' | 'sos' | 'more' | 'community-group-simulation' | 'community-stories' | 'my-stories' | 'story-editor' | 'learn' | 'admin-dashboard';
 export type Program = 'healing' | 'glow-up' | 'no-contact';
 
-export interface UserData {
+// This represents the data stored in the 'profiles' table
+export interface UserProfile {
+  id: string; // Corresponds to auth.users.id
   name: string;
+  role: 'user' | 'admin' | 'superadmin';
   onboardingComplete: boolean;
+  anonymous_display_name: string | null;
   breakupContext: {
     role: 'dumpee' | 'dumper' | 'mutual' | '';
     initiator: 'me' | 'them' | 'mutual' | '';
@@ -25,9 +30,6 @@ export interface UserData {
   program: Program | null;
   programDay: number;
   lastTaskCompletedDate: string | null;
-  journalEntries: JournalEntry[];
-  myStories: MyStory[];
-  moods: MoodEntry[];
   streaks: {
     noContact: number;
     journaling: number;
@@ -37,44 +39,62 @@ export interface UserData {
     name: string;
     phone: string;
   };
+}
+
+// This is the composite object used in the React context, assembled from multiple tables
+export interface UserData extends UserProfile {
+  journalEntries: JournalEntry[];
+  myStories: MyStory[];
+  moods: MoodEntry[];
   chatHistory: ChatMessage[];
 }
 
+
 export interface JournalEntry {
-  id: string;
-  date: string;
+  id: number; // Primary key from DB
+  user_id: string;
+  created_at: string;
   prompt?: string;
   content: string;
   mood: number;
 }
 
 export interface MyStory {
-  id: string;
-  date: string;
+  id: number; // Primary key from DB
+  user_id: string;
+  created_at: string;
+  updated_at: string;
   title: string;
   content: string;
 }
 
 export interface MoodEntry {
+  id: number; // Primary key from DB
+  user_id: string;
+  created_at: string; 
   date: string; // YYYY-MM-DD
   mood: number;
 }
 
 export interface ChatMessage {
+  id?: number; // Primary key from DB
+  user_id: string;
+  created_at?: string;
   role: 'user' | 'model';
   text: string;
 }
 
-export interface CommunityChatMessage {
+export interface CommunityGroupSimulationMessage {
   id: number;
-  name: string; // 'You', 'Liam', 'Chloe', 'Maya', etc.
+  name: string; // 'Liam', 'Chloe', 'Maya', etc.
   text: string;
 }
 
 export interface AppContextType {
-    // Fix: Changed userData to be non-nullable to match the state from useLocalStorage and resolve spread operator type errors.
-    userData: UserData;
-    setUserData: Dispatch<SetStateAction<UserData>>;
+    session: Session | null;
+    user: User | null;
+    userData: UserData | null;
+    setUserData: Dispatch<SetStateAction<UserData | null>>;
     activeScreen: Screen;
     navigationStack: Screen[];
     navigateTo: (screen: Screen) => void;
@@ -82,6 +102,6 @@ export interface AppContextType {
     resetToScreen: (screen: Screen) => void;
     showSOS: boolean;
     setShowSOS: Dispatch<SetStateAction<boolean>>;
-    activeStoryId: string | null;
-    setActiveStoryId: Dispatch<SetStateAction<string | null>>;
+    activeStoryId: number | null;
+    setActiveStoryId: Dispatch<SetStateAction<number | null>>;
 }

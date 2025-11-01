@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { CommunityChatMessage } from '../types';
+// Fix: Use the existing and correctly typed `CommunityGroupSimulationMessage` for the AI group chat.
+import { CommunityGroupSimulationMessage } from '../types';
 import { getAICommunityChatResponse } from '../services/geminiService';
 import { SendIcon } from '../components/Icons';
 import { AppContext } from '../App';
@@ -16,7 +17,7 @@ const CommunityChatScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
     const { userData } = context;
 
-    const [messages, setMessages] = useState<CommunityChatMessage[]>([
+    const [messages, setMessages] = useState<CommunityGroupSimulationMessage[]>([
         { id: 0, name: 'Venti', text: `Welcome to the community chat, ${userData?.name}. This is a safe space to share what's on your mind. Liam, Chloe, and Maya are here to listen.` }
     ]);
     const [input, setInput] = useState('');
@@ -32,7 +33,7 @@ const CommunityChatScreen: React.FC = () => {
     const handleSend = async () => {
         if (input.trim() === '' || isLoading) return;
 
-        const userMessage: CommunityChatMessage = { id: Date.now(), name: 'You', text: input };
+        const userMessage: CommunityGroupSimulationMessage = { id: Date.now(), name: 'You', text: input };
         const newMessages = [...messages, userMessage];
         setMessages(newMessages);
         setInput('');

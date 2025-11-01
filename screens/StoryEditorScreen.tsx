@@ -3,10 +3,11 @@ import { AppContext } from '../App';
 import { AppContextType, MyStory } from '../types';
 import { TrashIcon, ShareIcon } from '../components/Icons';
 import Card from '../components/Card';
+import { addStory, updateStory, deleteStory } from '../services/dataService';
 
 const StoryEditorScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { userData, setUserData, activeStoryId, goBack } = context;
+    const { user, userData, setUserData, activeStoryId, goBack } = context;
 
     const [story, setStory] = useState<Partial<MyStory>>({ title: '', content: '' });
 
@@ -19,40 +20,48 @@ const StoryEditorScreen: React.FC = () => {
         }
     }, [activeStoryId, userData?.myStories]);
 
-    const handleSave = () => {
-        if (!story.title?.trim() || !story.content?.trim()) {
+    const handleSave = async () => {
+        if (!story.title?.trim() || !story.content?.trim() || !user) {
             alert("Please provide a title and content for your story.");
             return;
         }
 
-        setUserData(prev => {
-            const newStories = [...(prev.myStories || [])];
-            const storyData = {
-                ...story,
-                date: new Date().toISOString(),
-                title: story.title as string,
-                content: story.content as string,
-            };
-
-            if (activeStoryId) {
-                const index = newStories.findIndex(s => s.id === activeStoryId);
-                if (index > -1) {
-                    newStories[index] = { ...newStories[index], ...storyData };
-                }
+        if (activeStoryId) { // Update existing story
+            const { data, error } = await updateStory(activeStoryId, { title: story.title, content: story.content });
+            if (error || !data) {
+                alert("Could not update story. Please try again.");
             } else {
-                newStories.unshift({ ...storyData, id: new Date().toISOString() });
+                setUserData(prev => prev ? ({ ...prev, myStories: prev.myStories.map(s => s.id === activeStoryId ? data : s) }) : null);
+                goBack();
             }
-            return { ...prev, myStories: newStories };
-        });
-        goBack();
+        } else { // Create new story
+            const newStoryData = {
+                user_id: user.id,
+                title: story.title,
+                content: story.content,
+            };
+            const { data, error } = await addStory(newStoryData as Omit<MyStory, 'id'|'created_at'|'updated_at'>);
+             if (error || !data) {
+                alert("Could not save new story. Please try again.");
+            } else {
+                setUserData(prev => prev ? ({ ...prev, myStories: [data, ...prev.myStories] }) : null);
+                goBack();
+            }
+        }
     };
 
-    const handleDelete = () => {
-        if (window.confirm("Are you sure you want to permanently delete this story?")) {
-            setUserData(prev => ({
+    const handleDelete = async () => {
+        if (activeStoryId && window.confirm("Are you sure you want to permanently delete this story?")) {
+            setUserData(prev => prev ? ({
                 ...prev,
                 myStories: prev.myStories.filter(s => s.id !== activeStoryId)
-            }));
+            }) : null);
+
+            const { error } = await deleteStory(activeStoryId);
+            if (error) {
+                alert("Could not delete story. Please try again.");
+                // Revert state if necessary
+            }
             goBack();
         }
     };

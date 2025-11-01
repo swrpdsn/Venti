@@ -1,14 +1,10 @@
-
-
-
-
-
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../App';
-import { AppContextType, JournalEntry, MoodEntry } from '../types';
+import { AppContextType, JournalEntry } from '../types';
 import { TrashIcon, SparklesIcon } from '../components/Icons';
 import { getAIWeeklySummary } from '../services/geminiService';
 import Card from '../components/Card';
+import { addJournalEntry, deleteJournalEntry, addOrUpdateMood } from '../services/dataService';
 
 // NOTE: Recharts is loaded from CDN and accessed via window.Recharts
 
@@ -60,23 +56,30 @@ const JournalScreen: React.FC = () => {
 
 const GuidedJournal: React.FC<{ setActiveTab: (tab: JournalTab) => void }> = ({ setActiveTab }) => {
     const context = useContext(AppContext) as AppContextType;
-    const { setUserData } = context;
+    const { user, setUserData } = context;
     const [content, setContent] = useState('');
     const prompt = "What’s one lesson you’ve learned from this pain?";
 
-    const saveEntry = () => {
-        if (!content.trim()) return;
-        const newEntry: JournalEntry = {
-            id: new Date().toISOString(),
-            date: new Date().toLocaleDateString(),
+    const saveEntry = async () => {
+        if (!content.trim() || !user) return;
+        
+        const newEntryData: Omit<JournalEntry, 'id' | 'created_at'> = {
+            user_id: user.id,
             prompt,
             content,
             mood: 5, // Default mood
         };
-        setUserData(prev => ({ ...prev, journalEntries: [newEntry, ...prev.journalEntries] }));
-        setContent('');
-        alert('Entry Saved!');
-        setActiveTab('free');
+
+        const { data: newEntry, error } = await addJournalEntry(newEntryData);
+
+        if (error || !newEntry) {
+            alert('Could not save entry. Please try again.');
+        } else {
+            setUserData(prev => prev ? ({ ...prev, journalEntries: [newEntry, ...prev.journalEntries] }) : null);
+            setContent('');
+            alert('Entry Saved!');
+            setActiveTab('free');
+        }
     };
     
     const isDawn = document.documentElement.classList.contains('theme-dawn');
@@ -105,11 +108,18 @@ const FreeJournal: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
     const { userData, setUserData } = context;
 
-    const deleteEntry = (id: string) => {
-        setUserData(prev => ({
+    const deleteEntry = async (id: number) => {
+        // Optimistic update
+        setUserData(prev => prev ? ({
             ...prev,
             journalEntries: prev.journalEntries.filter(entry => entry.id !== id)
-        }));
+        }) : null);
+
+        const { error } = await deleteJournalEntry(id);
+        if (error) {
+            alert('Could not delete entry. Please try again.');
+            // Revert state if necessary (by re-fetching)
+        }
     };
     
     const isDawn = document.documentElement.classList.contains('theme-dawn');
@@ -127,7 +137,7 @@ const FreeJournal: React.FC = () => {
                 userData?.journalEntries.map(entry => (
                     <Card key={entry.id}>
                         <div className="relative">
-                           <p className={`text-sm ${subTextColor}`}>{new Date(entry.id).toLocaleString()}</p>
+                           <p className={`text-sm ${subTextColor}`}>{new Date(entry.created_at).toLocaleString()}</p>
                            {entry.prompt && <p className={`font-semibold mt-1 italic ${promptColor}`}>"{entry.prompt}"</p>}
                            <p className={`mt-2 whitespace-pre-wrap ${textColor}`}>{entry.content}</p>
                            <button onClick={() => deleteEntry(entry.id)} aria-label="Delete entry" className={`absolute top-0 right-0 p-1 rounded-full ${isDawn ? 'text-slate-400 hover:text-red-500 hover:bg-red-100' : 'text-slate-500 hover:text-red-400 hover:bg-red-900/50'}`}>
@@ -143,7 +153,7 @@ const FreeJournal: React.FC = () => {
 
 const MoodTracker: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { userData, setUserData } = context;
+    const { user, userData, setUserData } = context;
     const [mood, setMood] = useState(5);
     const [summary, setSummary] = useState<string | null>(null);
     const [isSummaryLoading, setIsSummaryLoading] = useState(false);
@@ -164,21 +174,28 @@ const MoodTracker: React.FC = () => {
         setTimeout(() => setFeedback(''), 3000);
     }
 
-    const addMoodEntry = () => {
+    const addMoodEntry = async () => {
+        if (!user) return;
         const today = new Date().toISOString().split('T')[0];
-        const newEntry: MoodEntry = { date: today, mood };
+        const newEntry = { user_id: user.id, date: today, mood };
 
-        setUserData(prev => {
-            const existingEntryIndex = prev.moods.findIndex(m => m.date === today);
-            const newMoods = [...prev.moods];
-            if (existingEntryIndex > -1) {
-                newMoods[existingEntryIndex] = newEntry;
-            } else {
-                newMoods.push(newEntry);
-            }
-            return { ...prev, moods: newMoods };
-        });
-        showFeedback('Mood logged for today!');
+        const { data, error } = await addOrUpdateMood(newEntry);
+        if (error) {
+            showFeedback("Error logging mood. Please try again.");
+        } else if (data) {
+            setUserData(prev => {
+                if (!prev) return null;
+                const newMoods = [...prev.moods];
+                const existingIndex = newMoods.findIndex(m => m.date === today);
+                if (existingIndex > -1) {
+                    newMoods[existingIndex] = data;
+                } else {
+                    newMoods.push(data);
+                }
+                return { ...prev, moods: newMoods };
+            });
+            showFeedback('Mood logged for today!');
+        }
     };
 
     const handleGetSummary = async () => {
@@ -189,7 +206,7 @@ const MoodTracker: React.FC = () => {
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-        const recentEntries = userData.journalEntries.filter(entry => new Date(entry.id) >= oneWeekAgo);
+        const recentEntries = userData.journalEntries.filter(entry => new Date(entry.created_at) >= oneWeekAgo);
         const recentMoods = userData.moods.filter(mood => new Date(mood.date) >= oneWeekAgo);
 
         if (recentEntries.length < 2 && recentMoods.length < 2) {
@@ -205,11 +222,11 @@ const MoodTracker: React.FC = () => {
     
     const chartData = useMemo(() => {
         if (!userData) return [];
-        return userData.moods.slice(-7).map(m => ({
-            name: new Date(m.date).toLocaleDateString('en-US', { weekday: 'short' }),
+        return userData.moods.slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-7).map(m => ({
+            name: new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             mood: m.mood
         }));
-    }, [userData]);
+    }, [userData?.moods]);
 
 
     return (
