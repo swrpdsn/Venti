@@ -35,7 +35,7 @@ const AIChatScreen: React.FC = () => {
             }
         };
         setupInitialChat();
-    }, [user, userData, setUserData]);
+    }, [user, userData?.id]); // Depend on userData.id to prevent re-triggering on every chat message
 
     useEffect(() => {
         scrollToBottom();
@@ -43,42 +43,62 @@ const AIChatScreen: React.FC = () => {
 
     const handleSend = async () => {
         if (input.trim() === '' || isLoading || !userData || !user) return;
-
-        const userMessageData: Omit<ChatMessage, 'id' | 'created_at'> = { role: 'user', text: input, user_id: user.id };
-        
-        // Optimistically update UI
-        setUserData(prev => prev ? ({ ...prev, chatHistory: [...prev.chatHistory, userMessageData as ChatMessage] }) : null);
-        
+    
         const currentInput = input;
         setInput('');
+    
+        // 1. Optimistic UI update for user message
+        const optimisticUserMessage: ChatMessage = {
+            id: Date.now(), // Temporary ID for finding and replacing later
+            role: 'user',
+            text: currentInput,
+            user_id: user.id,
+            created_at: new Date().toISOString()
+        };
+        setUserData(prev => prev ? ({ ...prev, chatHistory: [...prev.chatHistory, optimisticUserMessage] }) : null);
         setIsLoading(true);
-
-        // Save user message to DB
-        await addChatMessage(userMessageData);
-        const updatedHistory = userData.chatHistory; // This now includes the optimistic update
-
-        const aiResponseText = await getAIResponse(currentInput, updatedHistory, userData);
-        
-        const sosTrigger = '[TRIGGER_SOS]';
-        let cleanResponse = aiResponseText;
-
-        if (aiResponseText.includes(sosTrigger)) {
-            setShowSOS(true);
-            cleanResponse = aiResponseText.replace(sosTrigger, '').trim();
+    
+        try {
+            // 2. Save user message to DB
+            const { data: savedUserMessage, error: userMsgError } = await addChatMessage({ role: 'user', text: currentInput, user_id: user.id });
+            if (userMsgError || !savedUserMessage) throw userMsgError || new Error("Failed to save user message.");
+    
+            // 3. Get AI response using the latest history
+            const historyForAI = [...userData.chatHistory.filter(m => m.id !== optimisticUserMessage.id), savedUserMessage];
+            const aiResponseText = await getAIResponse(currentInput, historyForAI, userData);
+            
+            let cleanResponse = aiResponseText;
+            if (aiResponseText.includes('[TRIGGER_SOS]')) {
+                setShowSOS(true);
+                cleanResponse = aiResponseText.replace('[TRIGGER_SOS]', '').trim();
+            }
+    
+            // 4. Save AI message to DB
+            const { data: savedAiMessage, error: aiMsgError } = await addChatMessage({ role: 'model', text: cleanResponse, user_id: user.id });
+            if (aiMsgError || !savedAiMessage) throw aiMsgError || new Error("Failed to save AI message.");
+    
+            // 5. Final state update with real data from DB
+            setUserData(prev => {
+                if (!prev) return null;
+                // Replace optimistic message with the saved one, then add the new AI message
+                const newHistory = prev.chatHistory.map(msg =>
+                    msg.id === optimisticUserMessage.id ? savedUserMessage : msg
+                );
+                newHistory.push(savedAiMessage);
+                return { ...prev, chatHistory: newHistory };
+            });
+    
+        } catch (error) {
+            console.error("Failed to send message:", error);
+            // Revert optimistic update on error
+            setUserData(prev => prev ? ({
+                ...prev,
+                chatHistory: prev.chatHistory.filter(msg => msg.id !== optimisticUserMessage.id)
+            }) : null);
+            alert("Sorry, your message could not be sent. Please try again.");
+        } finally {
+            setIsLoading(false);
         }
-
-        const aiMessageData: Omit<ChatMessage, 'id' | 'created_at'> = { role: 'model', text: cleanResponse, user_id: user.id };
-        const {data: savedAiMessage} = await addChatMessage(aiMessageData);
-        
-        // Final state update with data from DB
-        setUserData(prev => {
-            if (!prev) return null;
-            // Replace optimistic user message with real one, and add AI message
-            const finalHistory = [...prev.chatHistory.slice(0, -1), savedAiMessage as ChatMessage];
-             return { ...prev, chatHistory: finalHistory };
-        });
-
-        setIsLoading(false);
     };
     
     const messages = userData?.chatHistory || [];

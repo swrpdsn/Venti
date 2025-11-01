@@ -90,6 +90,8 @@ const HomeScreen: React.FC = () => {
         if (!user) return;
         const newEntry = { user_id: user.id, date: today, mood };
         
+        const originalUserData = userData;
+
         // Optimistic UI update
         setUserData(prev => {
             if (!prev) return null;
@@ -107,12 +109,13 @@ const HomeScreen: React.FC = () => {
         const { data, error } = await addOrUpdateMood(newEntry);
         if (error) {
             showFeedback("Error logging mood. Please try again.");
-            // Revert optimistic update if needed
+            setUserData(originalUserData); // Revert on error
         } else if (data) {
             // Update local state with actual data from DB
             setUserData(prev => {
                 if (!prev) return null;
-                const newMoods = prev.moods.map(m => (m.date === today ? data : m));
+                const newMoods = originalUserData.moods.filter(m => m.date !== today);
+                newMoods.push(data);
                 return { ...prev, moods: newMoods };
             });
         }
@@ -121,6 +124,8 @@ const HomeScreen: React.FC = () => {
     
     const handleCompleteTask = async () => {
         if (isTaskCompletedToday || !user) return;
+
+        const originalUserData = userData;
 
         const updates = {
             programDay: Math.min(30, userData.programDay + 1),
@@ -138,7 +143,7 @@ const HomeScreen: React.FC = () => {
         if (error) {
             showFeedback("Error saving progress. Please try again.");
             // Revert optimistic update
-             setUserData(prev => prev ? ({ ...prev, ...userData }) : null);
+             setUserData(originalUserData);
         }
     }
     

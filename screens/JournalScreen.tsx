@@ -109,6 +109,8 @@ const FreeJournal: React.FC = () => {
     const { userData, setUserData } = context;
 
     const deleteEntry = async (id: number) => {
+        const originalEntries = userData?.journalEntries ? [...userData.journalEntries] : [];
+
         // Optimistic update
         setUserData(prev => prev ? ({
             ...prev,
@@ -118,7 +120,8 @@ const FreeJournal: React.FC = () => {
         const { error } = await deleteJournalEntry(id);
         if (error) {
             alert('Could not delete entry. Please try again.');
-            // Revert state if necessary (by re-fetching)
+            // Revert state
+            setUserData(prev => prev ? ({ ...prev, journalEntries: originalEntries }) : null);
         }
     };
     
@@ -175,9 +178,10 @@ const MoodTracker: React.FC = () => {
     }
 
     const addMoodEntry = async () => {
-        if (!user) return;
+        if (!user || !userData) return;
         const today = new Date().toISOString().split('T')[0];
         const newEntry = { user_id: user.id, date: today, mood };
+        const originalUserData = userData;
 
         const { data, error } = await addOrUpdateMood(newEntry);
         if (error) {
@@ -185,7 +189,7 @@ const MoodTracker: React.FC = () => {
         } else if (data) {
             setUserData(prev => {
                 if (!prev) return null;
-                const newMoods = [...prev.moods];
+                const newMoods = [...originalUserData.moods];
                 const existingIndex = newMoods.findIndex(m => m.date === today);
                 if (existingIndex > -1) {
                     newMoods[existingIndex] = data;
