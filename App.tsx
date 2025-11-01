@@ -1,8 +1,5 @@
 
-
-
-
-import React, { useState, createContext, useMemo, useEffect, Dispatch, SetStateAction } from 'react';
+import React, { useState, createContext, useEffect, Dispatch, SetStateAction } from 'react';
 import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './services/supabaseClient';
@@ -76,46 +73,77 @@ const App: React.FC = () => {
     document.documentElement.className = currentTheme;
   }, []);
 
-  useEffect(() => {
-    const fetchAndSetUserData = async (user: User) => {
-        const fullData = await getFullUserData(user.id);
-        if (fullData) {
-            setUserData(fullData);
-        } else if (session?.user) { // New user, profile was just created or fetch failed
-            const newUserProfile: UserData = {
+  const handleUserSession = async (user: User) => {
+    setLoading(true);
+    try {
+        // Step 1: Check for an existing profile.
+        let { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        // Step 2: If no profile exists, create one immediately.
+        if (!profile) {
+            const newProfileData: Omit<UserProfile, 'id'> = {
                 ...initialUserProfile,
-                id: session.user.id,
-                name: session.user.email?.split('@')[0] || 'Friend',
-                journalEntries: [],
-                moods: [],
-                myStories: [],
-                chatHistory: [],
+                name: user.email?.split('@')[0] || 'Friend',
             };
-            setUserData(newUserProfile);
+
+            const { data: createdProfile, error: insertError } = await supabase
+                .from('profiles')
+                .insert({ id: user.id, ...newProfileData })
+                .select()
+                .single();
+
+            if (insertError) {
+                console.error("Critical error: Failed to create user profile.", insertError);
+                throw insertError;
+            }
+            profile = createdProfile;
         }
+
+        // Step 3: Profile is guaranteed to exist, now fetch all related data.
+        const fullUserData = await getFullUserData(user.id);
+        setUserData(fullUserData);
+    } catch (error) {
+        console.error("Error during session handling:", error);
+        alert("There was an error loading your profile. Please try logging in again.");
+        await supabase.auth.signOut();
+        setUserData(null);
+    } finally {
         setLoading(false);
     }
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        setLoading(true);
-        await fetchAndSetUserData(session.user);
-      } else {
-        setUserData(null);
-        setLoading(false);
-      }
-    });
+  };
 
-    // Check for initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session) {
+  useEffect(() => {
+    const initializeSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        if (session?.user) {
+            await handleUserSession(session.user);
+        } else {
             setLoading(false);
+        }
+    };
+
+    initializeSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        setSession(session);
+        if (event === 'SIGNED_IN' && session?.user) {
+            // Only fetch full data if user context is not already loaded
+            if (!userData || userData.id !== session.user.id) {
+                await handleUserSession(session.user);
+            }
+        } else if (event === 'SIGNED_OUT') {
+            setUserData(null);
+            setNavigationStack(['home']);
         }
     });
 
     return () => {
-      subscription?.unsubscribe();
+        subscription?.unsubscribe();
     };
   }, []);
 
