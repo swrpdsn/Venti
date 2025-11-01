@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AppContext } from '../App';
-import { AppContextType } from '../types';
+import { AppContext, AppContextType } from '../App';
 import Card from '../components/Card';
 import { adminGetAllUsers, adminUpdateUserRole, AdminUserView } from '../services/dataService';
 import LoadingScreen from '../components/Loading';

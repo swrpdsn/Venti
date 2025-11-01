@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
-import { AppContext } from '../App';
-import { AppContextType, Program } from '../types';
+import { AppContext, AppContextType } from '../App';
+import { Program } from '../types';
 
 interface ProgramTask {
     title: string;

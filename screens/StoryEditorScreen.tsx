@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { AppContext } from '../App';
-import { AppContextType, MyStory } from '../types';
+import { AppContext, AppContextType } from '../App';
+import { MyStory } from '../types';
 import { TrashIcon, ShareIcon } from '../components/Icons';
 import Card from '../components/Card';
 import { addStory, updateStory, deleteStory } from '../services/dataService';

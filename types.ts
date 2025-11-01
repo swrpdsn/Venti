@@ -1,6 +1,5 @@
-// Fix: Import types from React to resolve namespace errors.
-import type { Dispatch, SetStateAction } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
+// This file contains only shared types with no external dependencies,
+// making it safe for import in both the browser and Deno environments (Supabase Edge Functions).
 
 export type Screen = 'home' | 'journal' | 'chat' | 'programs' | 'sos' | 'more' | 'community-group-simulation' | 'community-stories' | 'my-stories' | 'story-editor' | 'learn' | 'admin-dashboard';
 export type Program = 'healing' | 'glow-up' | 'no-contact';
@@ -88,20 +87,4 @@ export interface CommunityGroupSimulationMessage {
   id: number;
   name: string; // 'Liam', 'Chloe', 'Maya', etc.
   text: string;
-}
-
-export interface AppContextType {
-    session: Session | null;
-    user: User | null;
-    userData: UserData | null;
-    setUserData: Dispatch<SetStateAction<UserData | null>>;
-    activeScreen: Screen;
-    navigationStack: Screen[];
-    navigateTo: (screen: Screen) => void;
-    goBack: () => void;
-    resetToScreen: (screen: Screen) => void;
-    showSOS: boolean;
-    setShowSOS: Dispatch<SetStateAction<boolean>>;
-    activeStoryId: number | null;
-    setActiveStoryId: Dispatch<SetStateAction<number | null>>;
 }

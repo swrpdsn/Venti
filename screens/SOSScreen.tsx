@@ -1,8 +1,7 @@
 
 
 import React, { useState, useContext, useEffect, useMemo } from 'react';
-import { AppContext } from '../App';
-import { AppContextType } from '../types';
+import { AppContext, AppContextType } from '../App';
 import { CloseIcon } from '../components/Icons';
 
 type SOSMode = 'panic' | 'helplines' | 'shred' | 'contact';

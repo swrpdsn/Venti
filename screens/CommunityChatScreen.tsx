@@ -3,8 +3,7 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { CommunityGroupSimulationMessage } from '../types';
 import { getAICommunityChatResponse } from '../services/geminiService';
 import { SendIcon } from '../components/Icons';
-import { AppContext } from '../App';
-import { AppContextType } from '../types';
+import { AppContext, AppContextType } from '../App';
 
 const personaColors: { [key: string]: {bg: string, text: string} } = {
     'Liam': { bg: 'bg-blue-500', text: 'text-white' },

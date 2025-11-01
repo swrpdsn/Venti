@@ -1,8 +1,8 @@
 
 
 import React, { useContext, useState } from 'react';
-import { AppContext } from '../App';
-import { AppContextType, Program, UserData } from '../types';
+import { AppContext, AppContextType } from '../App';
+import { Program, UserData } from '../types';
 import { UsersIcon, BookOpenIcon, ChevronRightIcon, PencilIcon, LightbulbIcon } from '../components/Icons';
 import Card from '../components/Card';
 import { supabase } from '../services/supabaseClient';

@@ -1,6 +1,5 @@
 import React, { useContext } from 'react';
-import { AppContext } from '../App';
-import { AppContextType } from '../types';
+import { AppContext, AppContextType } from '../App';
 import { ChevronRightIcon, PencilIcon } from '../components/Icons';
 import Card from '../components/Card';
 

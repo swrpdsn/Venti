@@ -1,6 +1,6 @@
 import React, { useState, useContext, useMemo } from 'react';
-import { AppContext } from '../App';
-import { AppContextType, JournalEntry } from '../types';
+import { AppContext, AppContextType } from '../App';
+import { JournalEntry } from '../types';
 import { TrashIcon, SparklesIcon } from '../components/Icons';
 import { getAIWeeklySummary } from '../services/geminiService';
 import Card from '../components/Card';

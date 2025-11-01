@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { ChatMessage } from '../types';
 import { getAIResponse } from '../services/geminiService';
 import { SendIcon } from '../components/Icons';
-import { AppContext } from '../App';
-import { AppContextType } from '../types';
+import { AppContext, AppContextType } from '../App';
 import { addChatMessage } from '../services/dataService';
 
 const AIChatScreen: React.FC = () => {

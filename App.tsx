@@ -1,7 +1,9 @@
 
 
-import React, { useState, createContext, useMemo, useEffect } from 'react';
-import { UserData, Screen, AppContextType, UserProfile } from './types';
+
+
+import React, { useState, createContext, useMemo, useEffect, Dispatch, SetStateAction } from 'react';
+import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './services/supabaseClient';
 import { getFullUserData } from './services/dataService';
@@ -38,6 +40,22 @@ export const initialUserProfile: Omit<UserProfile, 'id'> = {
   streaks: { noContact: 0, journaling: 0, selfCare: 0 },
   emergencyContact: { name: '', phone: '' },
 };
+
+export interface AppContextType {
+    session: Session | null;
+    user: User | null;
+    userData: UserData | null;
+    setUserData: Dispatch<SetStateAction<UserData | null>>;
+    activeScreen: Screen;
+    navigationStack: Screen[];
+    navigateTo: (screen: Screen) => void;
+    goBack: () => void;
+    resetToScreen: (screen: Screen) => void;
+    showSOS: boolean;
+    setShowSOS: Dispatch<SetStateAction<boolean>>;
+    activeStoryId: number | null;
+    setActiveStoryId: Dispatch<SetStateAction<number | null>>;
+}
 
 export const AppContext = createContext<AppContextType | null>(null);
 
