@@ -2,25 +2,36 @@ import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 const AuthScreen: React.FC = () => {
-    const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [view, setView] = useState<'login' | 'signup'>('signup'); // Default to signup
+    const [email, setEmail] = useState('dasanswarup@gmail.com');
+    const [password, setPassword] = useState('password');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setSuccessMessage(null);
 
         try {
-            if (isLogin) {
+            if (view === 'login') {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
-            } else {
+                // On successful login, the onAuthStateChange listener in App.tsx will handle the rest.
+            } else { // Sign up
                 const { error } = await supabase.auth.signUp({ email, password });
-                if (error) throw error;
-                alert('Check your email for the confirmation link!');
+                if (error) {
+                     if (error.message.includes('User already registered')) {
+                        setError('This email is already registered. Please try logging in.');
+                        setView('login');
+                        return;
+                    }
+                    throw error;
+                }
+                setSuccessMessage('Account created! You can now log in with these credentials.');
+                setView('login'); // Switch to login view after successful signup
             }
         } catch (error: any) {
             setError(error.error_description || error.message);
@@ -51,7 +62,13 @@ const AuthScreen: React.FC = () => {
             </div>
 
             <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
-                <h2 className={`text-2xl font-bold text-center mb-6 ${textColor}`}>{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+                <h2 className={`text-2xl font-bold text-center mb-2 ${textColor}`}>{view === 'login' ? 'Welcome Back' : 'Create Your Account'}</h2>
+                 <p className={`text-center text-sm mb-4 ${isDawn ? 'text-slate-500' : 'text-slate-400'}`}>
+                    <strong className="font-bold">Important:</strong> Please use the account below.
+                    <br />
+                    <strong className="font-bold">First, SIGN UP.</strong> Then, you can LOG IN.
+                </p>
+                {successMessage && <p className="text-green-400 text-sm text-center font-bold mb-4">{successMessage}</p>}
                 <form onSubmit={handleAuth} className="space-y-4">
                     <input
                         type="email"
@@ -70,12 +87,18 @@ const AuthScreen: React.FC = () => {
                         required
                     />
                     <button type="submit" disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${buttonClass}`}>
-                        {loading ? 'Loading...' : (isLogin ? 'Log In' : 'Sign Up')}
+                        {loading ? 'Loading...' : (view === 'login' ? 'Log In' : 'Sign Up')}
                     </button>
                     {error && <p className="text-red-400 text-sm text-center">{error}</p>}
                 </form>
-                <button onClick={() => setIsLogin(!isLogin)} className={`w-full mt-4 text-sm font-semibold ${secondaryButtonClass}`}>
-                    {isLogin ? 'Need an account? Sign Up' : 'Already have an account? Log In'}
+                <button 
+                  onClick={() => {
+                    setView(view === 'login' ? 'signup' : 'login');
+                    setError(null);
+                  }} 
+                  className={`w-full mt-4 text-sm font-semibold ${secondaryButtonClass}`}
+                >
+                    {view === 'login' ? 'Need an account? Sign Up' : 'Already have an account? Log In'}
                 </button>
             </div>
         </div>
