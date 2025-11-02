@@ -27,7 +27,7 @@ export const initialUserProfile: Omit<UserProfile, 'id'> = {
   onboardingComplete: false,
   anonymous_display_name: null,
   breakupContext: { role: '', initiator: '', reason: '', redFlags: '', feelings: [] },
-  exName: '',
+  ex_name: '',
   shieldList: ['', '', '', '', ''],
   baseline: { mood: 5, sleep: 8, anxiety: 5, urge: 5 },
   program: null,

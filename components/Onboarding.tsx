@@ -42,7 +42,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, initialData }) => {
       case 1: return <WelcomeScreen name={data.name} onNameChange={handleInputChange} />;
       case 2: return <ConsentScreen />;
       case 3: return <BreakupContextScreen data={data.breakupContext} onChange={handleInputChange} />;
-      case 4: return <ExNameScreen exName={data.exName} onExNameChange={handleInputChange} />;
+      case 4: return <ExNameScreen ex_name={data.ex_name} onExNameChange={handleInputChange} />;
       case 5: return <ReleaseThoughtScreen onComplete={nextStep} />;
       case 6: return <ShieldListScreen list={data.shieldList} onChange={handleShieldListChange} />;
       case 7: return <BaselineScreen data={data.baseline} setData={setData} />;
@@ -124,11 +124,11 @@ const BreakupContextScreen: React.FC<{ data: UserData['breakupContext'], onChang
     );
 };
 
-const ExNameScreen: React.FC<{exName: string, onExNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void}> = ({exName, onExNameChange}) => (
+const ExNameScreen: React.FC<{ex_name: string, onExNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void}> = ({ex_name, onExNameChange}) => (
     <div className="text-center flex flex-col justify-center h-full">
         <h2 className="text-2xl font-bold mb-4">Let's Name This Chapter</h2>
         <p className="text-brand-light-purple mb-6">To heal from something, we must be able to name it. This could be their name, a nickname, or a word that represents this time (e.g., "The Lesson"). This is for your eyes only.</p>
-        <input type="text" name="exName" value={exName} onChange={onExNameChange} placeholder="What should we call this chapter?" className="bg-white/20 border-2 border-transparent focus:border-white focus:ring-0 rounded-lg p-3 text-center text-white placeholder-white/70"/>
+        <input type="text" name="ex_name" value={ex_name} onChange={onExNameChange} placeholder="What should we call this chapter?" className="bg-white/20 border-2 border-transparent focus:border-white focus:ring-0 rounded-lg p-3 text-center text-white placeholder-white/70"/>
     </div>
 );
 
