@@ -1,12 +1,41 @@
-import { supabase } from './supabaseClient';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient';
 import { UserData, UserProfile, JournalEntry, MoodEntry, MyStory, ChatMessage } from '../types';
 
+// Helper for making secure, manual fetch requests to Supabase functions
+const invokeFunction = async (functionName: string, body?: object) => {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) throw new Error('Could not get user session.');
+    if (!session) throw new Error('User not authenticated.');
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify(body || {}), // Ensure a body is always sent
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        throw new Error(errorBody.error || `Function invocation failed with status ${response.status}`);
+    }
+
+    // Handle cases where the function might not return a body
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+        return response.json();
+    }
+    return {};
+};
+
 // This function securely fetches all user data via an Edge Function,
-// bypassing the recursive RLS policy on the 'profiles' table.
+// bypassing RLS issues.
 export const fetchUserDataBundle = async (): Promise<UserData | null> => {
     try {
-        const { data, error } = await supabase.functions.invoke('get-user-data-bundle');
-        if (error) throw error;
+        const data = await invokeFunction('get-user-data-bundle');
         return data;
     } catch (error: any) {
         console.error("Error invoking get-user-data-bundle:", error.message);
@@ -98,8 +127,7 @@ export type AdminUserView = Omit<UserProfile, 'journalEntries' | 'moods' | 'mySt
 
 export const adminGetAllUsers = async (): Promise<AdminUserView[]> => {
     try {
-        const { data, error } = await supabase.functions.invoke('admin-get-users');
-        if (error) throw error;
+        const data = await invokeFunction('admin-get-users');
         return data.users;
     } catch (error) {
         console.error("Error invoking admin-get-users function:", error);
@@ -109,10 +137,8 @@ export const adminGetAllUsers = async (): Promise<AdminUserView[]> => {
 
 export const adminUpdateUserRole = async (targetUserId: string, newRole: 'user' | 'admin'): Promise<{ success: boolean; error?: string }> => {
     try {
-        const { data, error } = await supabase.functions.invoke('admin-update-role', {
-            body: { targetUserId, newRole },
-        });
-        if (error) throw error;
+        const body = { targetUserId, newRole };
+        const data = await invokeFunction('admin-update-role', body);
         if (data.error) throw new Error(data.error);
         return { success: true };
     } catch (error: any) {
