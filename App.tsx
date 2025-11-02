@@ -1,10 +1,12 @@
 
 
+
+
 import React, { useState, createContext, useEffect, Dispatch, SetStateAction } from 'react';
 import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './services/supabaseClient';
-import { getFullUserData } from './services/dataService';
+import { fetchUserDataBundle } from './services/dataService';
 
 import Onboarding from './components/Onboarding';
 import HomeScreen from './screens/HomeScreen';
@@ -77,56 +79,10 @@ const App: React.FC = () => {
   const handleUserSession = async (user: User) => {
     setLoading(true);
     try {
-        // First, try to fetch the user's profile.
-        let { data: profile, error: selectError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-
-        // If the select returns an error that ISN'T 'no rows found', it's a real problem.
-        if (selectError && selectError.code !== 'PGRST116') {
-            console.error("Unexpected error fetching profile:", selectError);
-            throw selectError;
-        }
-
-        // If no profile was found, this is a new user. We must create a profile for them.
-        if (!profile) {
-            console.log("No profile found. Attempting to create one.");
-            
-            // Exclude 'role' from the initial profile data to avoid RLS violations.
-            // The database should handle setting a default role.
-            const { role, ...profileDefaults } = initialUserProfile;
-
-            const newProfileData = {
-                ...profileDefaults,
-                name: user.email?.split('@')[0] || 'Friend',
-            };
-
-            const { error: insertError } = await supabase
-                .from('profiles')
-                .insert({ id: user.id, ...newProfileData });
-
-            if (insertError) {
-                // A race condition can happen if a backend trigger also creates the profile.
-                // We can safely ignore a 'unique_violation' error (code 23505) because
-                // it means the profile we need now exists. We'll fetch it below.
-                if (insertError.code !== '23505') {
-                    // Any other insert error is a critical failure.
-                    console.error("Critical error: Failed to create user profile.", insertError);
-                    throw insertError;
-                }
-                console.warn("Race condition detected: Profile was created by another process between our check and insert. This is safe to ignore.");
-            } else {
-                 console.log("New user profile created successfully.");
-            }
-        }
-
-        // By this point, the profile is guaranteed to exist. We can fetch all the user data.
-        const fullUserData = await getFullUserData(user.id);
+        // Securely fetch all user data via an Edge Function to bypass broken RLS policies.
+        const fullUserData = await fetchUserDataBundle();
         if (!fullUserData) {
-            // This would be a very strange and critical error.
-            throw new Error("A profile exists for this user, but failed to load their full data bundle.");
+            throw new Error("Failed to load user data from the server.");
         }
         
         setUserData(fullUserData);

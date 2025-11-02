@@ -1,44 +1,18 @@
 import { supabase } from './supabaseClient';
 import { UserData, UserProfile, JournalEntry, MoodEntry, MyStory, ChatMessage } from '../types';
 
-// Fetch the entire user data object from all tables
-export const getFullUserData = async (userId: string): Promise<UserData | null> => {
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-    if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError?.message);
+// This function securely fetches all user data via an Edge Function,
+// bypassing the recursive RLS policy on the 'profiles' table.
+export const fetchUserDataBundle = async (): Promise<UserData | null> => {
+    try {
+        const { data, error } = await supabase.functions.invoke('get-user-data-bundle');
+        if (error) throw error;
+        return data;
+    } catch (error: any) {
+        console.error("Error invoking get-user-data-bundle:", error.message);
         return null;
     }
-
-    const [
-        { data: journalEntries, error: journalError },
-        { data: moods, error: moodsError },
-        { data: myStories, error: storiesError },
-        { data: chatHistory, error: chatError }
-    ] = await Promise.all([
-        supabase.from('journal_entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('moods').select('*').eq('user_id', userId).order('date', { ascending: false }),
-        supabase.from('my_stories').select('*').eq('user_id', userId).order('updated_at', { ascending: false }),
-        supabase.from('chat_history').select('*').eq('user_id', userId).order('created_at', { ascending: true })
-    ]);
-    
-    if (journalError || moodsError || storiesError || chatError) {
-        console.error('Error fetching user data parts:', { journalError, moodsError, storiesError, chatError });
-        // Return profile even if sub-queries fail
-    }
-
-    return {
-        ...profile,
-        journalEntries: journalEntries || [],
-        moods: moods || [],
-        myStories: myStories || [],
-        chatHistory: chatHistory || [],
-    };
-};
+}
 
 // Update a user's profile data
 export const updateProfile = async (userId: string, updates: Partial<UserProfile>) => {

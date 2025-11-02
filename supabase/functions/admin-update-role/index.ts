@@ -3,7 +3,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../shared/cors.ts'
 
-// Fix: Add type definition for the Deno global to resolve TypeScript error in non-Deno environments.
+// Add type definition for the Deno global to resolve TypeScript error in non-Deno environments.
 declare const Deno: {
     env: {
         get: (key: string) => string | undefined;
@@ -16,6 +16,15 @@ serve(async (req) => {
   }
 
   try {
+    // Ensure essential environment variables are set
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+        throw new Error('Missing required Supabase environment variables in Edge Function.');
+    }
+
     const { targetUserId, newRole } = await req.json();
 
     if (newRole !== 'user' && newRole !== 'admin') {
@@ -26,10 +35,18 @@ serve(async (req) => {
     }
 
     // 1. Verify caller is a superadmin
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     const userClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      supabaseUrl,
+      anonKey,
+      { global: { headers: { Authorization: authHeader } } }
     )
     const { data: { user }, error: userError } = await userClient.auth.getUser();
     if (userError) throw userError;
@@ -57,10 +74,7 @@ serve(async (req) => {
     }
 
     // 2. Use service role client to perform update
-    const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
     const { error: updateError } = await serviceClient
         .from('profiles')
         .update({ role: newRole })
@@ -74,6 +88,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    console.error('Error in admin-update-role:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
