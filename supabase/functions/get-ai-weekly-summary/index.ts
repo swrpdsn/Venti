@@ -1,4 +1,3 @@
-
 // supabase/functions/get-ai-weekly-summary/index.ts
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { corsHeaders } from '../shared/cors.ts'
