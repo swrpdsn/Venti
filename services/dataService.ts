@@ -31,18 +31,6 @@ const invokeFunction = async (functionName: string, body?: object) => {
     return {};
 };
 
-// This function securely fetches all user data via an Edge Function,
-// bypassing RLS issues.
-export const fetchUserDataBundle = async (): Promise<UserData | null> => {
-    try {
-        const data = await invokeFunction('get-user-data-bundle');
-        return data;
-    } catch (error: any) {
-        console.error("Error invoking get-user-data-bundle:", error.message);
-        return null;
-    }
-}
-
 // Update a user's profile data
 export const updateProfile = async (userId: string, updates: Partial<UserProfile>) => {
     const { data, error } = await supabase

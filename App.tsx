@@ -2,7 +2,6 @@ import React, { useState, createContext, useEffect, Dispatch, SetStateAction } f
 import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './services/supabaseClient';
-import { fetchUserDataBundle } from './services/dataService';
 
 import Onboarding from './components/Onboarding';
 import HomeScreen from './screens/HomeScreen';
@@ -80,11 +79,69 @@ const App: React.FC<AppProps> = ({ adminMode = false }) => {
   const handleUserSession = async (user: User) => {
     setLoading(true);
     try {
-        // Securely fetch all user data via an Edge Function to bypass broken RLS policies.
-        const fullUserData = await fetchUserDataBundle();
-        if (!fullUserData) {
-            throw new Error("Failed to load user data from the server.");
+        // Fetch all user data directly. This replaces the get-user-data-bundle Edge Function
+        // to work around fetch issues and relies on RLS policies being correctly configured in Supabase.
+
+        // Step 1: Get or create profile
+        let { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError && profileError.code !== 'PGRST116') { // PGRST116: exact one row not found
+            throw profileError;
         }
+        
+        if (!profile) {
+            const { role, ...profileDefaults } = initialUserProfile;
+            const newProfileData = {
+                id: user.id,
+                ...profileDefaults,
+                name: user.email?.split('@')[0] || 'Friend',
+            };
+
+            const { data: insertedProfile, error: insertError } = await supabase
+                .from('profiles')
+                .insert(newProfileData)
+                .select()
+                .single();
+
+            if (insertError) throw insertError;
+            profile = insertedProfile;
+        }
+
+        // Step 2: Fetch all other data in parallel
+        const [
+            journalResult,
+            moodsResult,
+            myStoriesResult,
+            chatHistoryResult
+        ] = await Promise.all([
+            supabase.from('journal_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+            supabase.from('moods').select('*').eq('user_id', user.id).order('date', { ascending: false }),
+            supabase.from('my_stories').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }),
+            supabase.from('chat_history').select('*').eq('user_id', user.id).order('created_at', { ascending: true })
+        ]);
+
+        if (journalResult.error || moodsResult.error || myStoriesResult.error || chatHistoryResult.error) {
+            console.error({ 
+              journalError: journalResult.error, 
+              moodsError: moodsResult.error, 
+              storiesError: myStoriesResult.error, 
+              chatError: chatHistoryResult.error 
+            });
+            throw new Error("Failed to fetch some of the user data.");
+        }
+
+        // Step 3: Assemble the full UserData object
+        const fullUserData: UserData = {
+            ...(profile as UserProfile),
+            journalEntries: journalResult.data || [],
+            moods: moodsResult.data || [],
+            myStories: myStoriesResult.data || [],
+            chatHistory: chatHistoryResult.data || [],
+        };
         
         setUserData(fullUserData);
 
