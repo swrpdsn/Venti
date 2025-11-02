@@ -77,63 +77,69 @@ const App: React.FC = () => {
   const handleUserSession = async (user: User) => {
     setLoading(true);
     try {
-        // 1. Check if a profile exists for this user.
+        // First, try to fetch the user's profile.
         let { data: profile, error: selectError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .single();
 
-        // If there's an error and it's NOT "no rows found", it's a real problem.
+        // If the select returns an error that ISN'T 'no rows found', it's a real problem.
         if (selectError && selectError.code !== 'PGRST116') {
+            console.error("Unexpected error fetching profile:", selectError);
             throw selectError;
         }
 
-        // 2. If no profile exists, create one. This happens on first sign-up.
+        // If no profile was found, this is a new user. We must create a profile for them.
         if (!profile) {
-            console.log("No profile found for new user, creating one.");
-            const newProfileData: Omit<UserProfile, 'id'> = {
-                ...initialUserProfile,
+            console.log("No profile found. Attempting to create one.");
+            
+            // Exclude 'role' from the initial profile data to avoid RLS violations.
+            // The database should handle setting a default role.
+            const { role, ...profileDefaults } = initialUserProfile;
+
+            const newProfileData = {
+                ...profileDefaults,
                 name: user.email?.split('@')[0] || 'Friend',
             };
 
-            const { data: newlyCreatedProfile, error: insertError } = await supabase
+            const { error: insertError } = await supabase
                 .from('profiles')
-                .insert({ id: user.id, ...newProfileData })
-                .select()
-                .single();
+                .insert({ id: user.id, ...newProfileData });
 
             if (insertError) {
-                // This is a critical failure.
-                console.error("Critical error: Failed to create user profile.", insertError);
-                throw insertError;
+                // A race condition can happen if a backend trigger also creates the profile.
+                // We can safely ignore a 'unique_violation' error (code 23505) because
+                // it means the profile we need now exists. We'll fetch it below.
+                if (insertError.code !== '23505') {
+                    // Any other insert error is a critical failure.
+                    console.error("Critical error: Failed to create user profile.", insertError);
+                    throw insertError;
+                }
+                console.warn("Race condition detected: Profile was created by another process between our check and insert. This is safe to ignore.");
+            } else {
+                 console.log("New user profile created successfully.");
             }
-            
-            // On successful creation, we can immediately create the full user data object.
-            // The other tables (journal, stories, etc.) will be empty.
-            setUserData({
-                ...(newlyCreatedProfile as UserProfile),
-                journalEntries: [],
-                myStories: [],
-                moods: [],
-                chatHistory: [],
-            });
-            return; // Exit early since we have all the data we need for a new user
         }
-        
-        // 3. If a profile was found, fetch all associated data.
+
+        // By this point, the profile is guaranteed to exist. We can fetch all the user data.
         const fullUserData = await getFullUserData(user.id);
-        
         if (!fullUserData) {
-            throw new Error("User profile exists, but failed to load full user data.");
+            // This would be a very strange and critical error.
+            throw new Error("A profile exists for this user, but failed to load their full data bundle.");
         }
         
         setUserData(fullUserData);
 
     } catch (error: any) {
-        const errorMessage = error.message || 'An unknown error occurred.';
-        console.error("Error during session handling:", error);
-        alert(`There was an error loading your profile: ${errorMessage}. Please try logging in again.`);
+        console.error("Full error object during session handling:", error);
+        
+        const userMessage = (error && error.message)
+            ? `Error: ${error.message}`
+            : "An unexpected error occurred loading your profile.";
+
+        alert(`${userMessage}\n\nYou will be logged out. Please try logging in again.`);
+        
         await supabase.auth.signOut();
         setUserData(null);
     } finally {

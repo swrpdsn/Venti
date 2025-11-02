@@ -1,25 +1,28 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
-type AuthMode = 'login' | 'signup';
-
 const AuthScreen: React.FC = () => {
-    const [mode, setMode] = useState<AuthMode>('login');
     const [email, setEmail] = useState('dasanswarup@gmail.com');
-    const [password, setPassword] = useState('password');
+    const [password, setPassword] = useState('Afstro@123');
     const [loading, setLoading] = useState(false);
+    const [currentAction, setCurrentAction] = useState<'login' | 'signup' | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [message, setMessage] = useState<string | null>(null);
 
-    const handleAuth = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleAuth = async (action: 'login' | 'signup') => {
         setLoading(true);
+        setCurrentAction(action);
         setError(null);
+        setMessage(null);
 
         try {
             let authError;
-            if (mode === 'signup') {
+            if (action === 'signup') {
                 const { error } = await supabase.auth.signUp({ email, password });
                 authError = error;
+                if (!authError) {
+                    setMessage("Sign-up successful! Please check your email to confirm your account before logging in.");
+                }
             } else {
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 authError = error;
@@ -27,11 +30,11 @@ const AuthScreen: React.FC = () => {
             if (authError) {
                 throw authError;
             }
-            // On successful login/signup, the onAuthStateChange listener in App.tsx will take over.
         } catch (error: any) {
             setError(error.error_description || error.message);
         } finally {
             setLoading(false);
+            // Let currentAction persist to show which button was pressed
         }
     };
     
@@ -42,8 +45,8 @@ const AuthScreen: React.FC = () => {
     const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
     const cardClass = isDawn ? 'bg-white/70' : 'bg-slate-800/40';
     const inputClass = `w-full p-3 border rounded-md focus:ring-2 focus:border-transparent ${isDawn ? 'bg-white border-slate-300 text-slate-800 focus:ring-dawn-primary' : 'bg-slate-900/50 border-slate-700 text-dusk-text focus:ring-dusk-primary'}`;
-    const buttonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
-    const toggleButtonColor = isDawn ? 'text-dawn-secondary' : 'text-dusk-secondary';
+    const loginButtonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
+    const signupButtonClass = isDawn ? 'bg-dawn-secondary text-white hover:bg-dawn-secondary/90' : 'bg-dusk-secondary text-dusk-bg-start hover:bg-dusk-secondary/90';
 
     return (
         <div className={`min-h-screen font-sans flex flex-col items-center justify-center p-4 transition-colors duration-500 ${backgroundClass}`}>
@@ -57,10 +60,10 @@ const AuthScreen: React.FC = () => {
             </div>
 
             <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
-                <h2 className={`text-2xl font-bold text-center mb-4 ${textColor}`}>
-                    {mode === 'login' ? 'Welcome Back' : 'Create Your Account'}
+                <h2 className={`text-2xl font-bold text-center mb-6 ${textColor}`}>
+                    Welcome to Venti
                 </h2>
-                <form onSubmit={handleAuth} className="space-y-4">
+                <div className="space-y-4">
                     <input
                         type="email"
                         placeholder="Email"
@@ -77,21 +80,17 @@ const AuthScreen: React.FC = () => {
                         className={inputClass}
                         required
                     />
-                    <button type="submit" disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${buttonClass}`}>
-                        {loading ? 'Loading...' : (mode === 'login' ? 'Log In' : 'Sign Up')}
-                    </button>
+                    <div className="space-y-3 pt-2">
+                        <button onClick={() => handleAuth('login')} disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${loginButtonClass}`}>
+                             {loading && currentAction === 'login' ? 'Logging in...' : 'Log In'}
+                        </button>
+                        <button onClick={() => handleAuth('signup')} disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${signupButtonClass}`}>
+                             {loading && currentAction === 'signup' ? 'Signing up...' : 'Sign Up'}
+                        </button>
+                    </div>
+
                     {error && <p className="text-red-400 text-sm text-center mt-2">{error}</p>}
-                </form>
-                 <div className="text-center mt-4">
-                    <button
-                        onClick={() => {
-                            setMode(mode === 'login' ? 'signup' : 'login');
-                            setError(null);
-                        }}
-                        className={`text-sm font-semibold hover:underline ${toggleButtonColor}`}
-                    >
-                        {mode === 'login' ? 'Need an account? Sign Up' : 'Already have an account? Log In'}
-                    </button>
+                    {message && <p className="text-green-500 text-sm text-center mt-2">{message}</p>}
                 </div>
             </div>
         </div>
