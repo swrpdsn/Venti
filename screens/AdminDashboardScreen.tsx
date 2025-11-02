@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AppContext, AppContextType } from '../App';
 import Card from '../components/Card';
-import { adminGetAllUsers, adminUpdateUserRole, AdminUserView } from '../services/dataService';
+// Fix: Import AdminUserView from types.ts and other functions from dataService.ts
+import { adminGetAllUsers, adminUpdateUserRole } from '../services/dataService';
+import { AdminUserView } from '../types';
 
 const AdminDashboardScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;

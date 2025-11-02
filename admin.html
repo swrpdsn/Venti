@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Venti - Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Using a simpler config for the admin panel
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-deep-purple': '#1e1b4b',
+              'brand-purple': '#4c1d95',
+              'brand-light-purple': '#c4b5fd',
+              'brand-teal': '#14b8a6',
+              'brand-light-gray': '#f8fafc',
+              'brand-text': '#334155',
+              // Dawn Theme (Day)
+              'dawn-bg-start': '#fde68a', 
+              'dawn-bg-end': '#81e6d9',
+              'dawn-primary': '#dd6b20',
+              'dawn-secondary': '#38b2ac',
+              'dawn-text': '#2d3748',
+              'dawn-card': 'rgba(255, 255, 255, 0.7)',
+
+              // Dusk Theme (Night)
+              'dusk-bg-start': '#2b1055',
+              'dusk-bg-end': '#7668b2',
+              'dusk-primary': '#a78bfa',
+              'dusk-secondary': '#fde68a',
+              'dusk-text': '#e2e8f0',
+              'dusk-card': 'rgba(45, 55, 72, 0.4)',
+            },
+          }
+        }
+      }
+    </script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+  }
+}
+</script>
+</head>
+  <body class="bg-brand-light-gray">
+    <div id="root"></div>
+    <script type="module" src="/admin.tsx"></script>
+  </body>
+</html>

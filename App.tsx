@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, createContext, useEffect, Dispatch, SetStateAction } from 'react';
 import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
@@ -22,8 +19,7 @@ import MyStoriesScreen from './screens/MyStoriesScreen';
 import StoryEditorScreen from './screens/StoryEditorScreen';
 import AuthScreen from './screens/AuthScreen';
 import LoadingScreen from './components/Loading';
-import AdminDashboardScreen from './screens/AdminDashboardScreen';
-import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon, ShieldIcon } from './components/Icons';
+import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon } from './components/Icons';
 
 export const initialUserProfile: Omit<UserProfile, 'id'> = {
   name: '',
@@ -79,8 +75,8 @@ const App: React.FC = () => {
   const handleUserSession = async (user: User) => {
     setLoading(true);
     try {
-        // Securely fetch all user data via an Edge Function to bypass broken RLS policies.
-        const fullUserData = await fetchUserDataBundle();
+        // Fetch all user data directly from client-side service
+        const fullUserData = await fetchUserDataBundle(user);
         if (!fullUserData) {
             throw new Error("Failed to load user data from the server.");
         }
@@ -213,7 +209,6 @@ const App: React.FC = () => {
           case 'community-stories': return <CommunityStoriesScreen />;
           case 'my-stories': return <MyStoriesScreen />;
           case 'story-editor': return <StoryEditorScreen />;
-          case 'admin-dashboard': return <AdminDashboardScreen />;
           default: return <HomeScreen />;
         }
       };
@@ -243,7 +238,7 @@ const Header: React.FC = () => {
   if (!context) return null;
   const { setShowSOS, goBack, activeScreen } = context;
 
-  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more', 'admin-dashboard'].includes(activeScreen);
+  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more'].includes(activeScreen);
   const isDawn = document.documentElement.classList.contains('theme-dawn');
 
   const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
@@ -288,11 +283,6 @@ const BottomNav: React.FC = () => {
     { screen: 'programs', label: 'Program', icon: ProgramsIcon },
     { screen: 'more', label: 'More', icon: MoreIcon },
   ];
-
-  if (userData?.role === 'admin' || userData?.role === 'superadmin') {
-      const moreIndex = navItems.findIndex(item => item.screen === 'more');
-      navItems.splice(moreIndex, 0, { screen: 'admin-dashboard', label: 'Admin', icon: ShieldIcon });
-  }
   
   const isDawn = document.documentElement.classList.contains('theme-dawn');
   const baseBg = isDawn ? 'bg-white/80' : 'bg-slate-800/60';
