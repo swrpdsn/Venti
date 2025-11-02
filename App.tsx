@@ -1,4 +1,5 @@
 
+
 import React, { useState, createContext, useEffect, Dispatch, SetStateAction } from 'react';
 import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
@@ -76,45 +77,70 @@ const App: React.FC = () => {
   const handleUserSession = async (user: User) => {
     setLoading(true);
     try {
-        // Step 1: Check for an existing profile.
-        let { data: profile } = await supabase
+        // 1. Check if a profile exists for this user.
+        let { data: profile, error: selectError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .single();
 
-        // Step 2: If no profile exists, create one immediately.
+        // If there's an error and it's NOT "no rows found", it's a real problem.
+        if (selectError && selectError.code !== 'PGRST116') {
+            throw selectError;
+        }
+
+        // 2. If no profile exists, create one. This happens on first sign-up.
         if (!profile) {
+            console.log("No profile found for new user, creating one.");
             const newProfileData: Omit<UserProfile, 'id'> = {
                 ...initialUserProfile,
                 name: user.email?.split('@')[0] || 'Friend',
             };
 
-            const { data: createdProfile, error: insertError } = await supabase
+            const { data: newlyCreatedProfile, error: insertError } = await supabase
                 .from('profiles')
                 .insert({ id: user.id, ...newProfileData })
                 .select()
                 .single();
 
             if (insertError) {
+                // This is a critical failure.
                 console.error("Critical error: Failed to create user profile.", insertError);
                 throw insertError;
             }
-            profile = createdProfile;
+            
+            // On successful creation, we can immediately create the full user data object.
+            // The other tables (journal, stories, etc.) will be empty.
+            setUserData({
+                ...(newlyCreatedProfile as UserProfile),
+                journalEntries: [],
+                myStories: [],
+                moods: [],
+                chatHistory: [],
+            });
+            return; // Exit early since we have all the data we need for a new user
         }
-
-        // Step 3: Profile is guaranteed to exist, now fetch all related data.
+        
+        // 3. If a profile was found, fetch all associated data.
         const fullUserData = await getFullUserData(user.id);
+        
+        if (!fullUserData) {
+            throw new Error("User profile exists, but failed to load full user data.");
+        }
+        
         setUserData(fullUserData);
-    } catch (error) {
+
+    } catch (error: any) {
+        const errorMessage = error.message || 'An unknown error occurred.';
         console.error("Error during session handling:", error);
-        alert("There was an error loading your profile. Please try logging in again.");
+        alert(`There was an error loading your profile: ${errorMessage}. Please try logging in again.`);
         await supabase.auth.signOut();
         setUserData(null);
     } finally {
         setLoading(false);
     }
   };
+
 
   useEffect(() => {
     const initializeSession = async () => {
