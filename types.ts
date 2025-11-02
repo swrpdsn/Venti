@@ -1,7 +1,7 @@
 // This file contains only shared types with no external dependencies,
 // making it safe for import in both the browser and Deno environments (Supabase Edge Functions).
 
-export type Screen = 'home' | 'journal' | 'chat' | 'programs' | 'sos' | 'more' | 'community-group-simulation' | 'community-stories' | 'my-stories' | 'story-editor' | 'learn';
+export type Screen = 'home' | 'journal' | 'chat' | 'programs' | 'sos' | 'more' | 'community-group-simulation' | 'community-stories' | 'my-stories' | 'story-editor' | 'learn' | 'admin-dashboard';
 export type Program = 'healing' | 'glow-up' | 'no-contact';
 
 // This represents the data stored in the 'profiles' table
@@ -46,11 +46,6 @@ export interface UserData extends UserProfile {
   myStories: MyStory[];
   moods: MoodEntry[];
   chatHistory: ChatMessage[];
-}
-
-// Fix: Add AdminUserView interface for the admin dashboard.
-export interface AdminUserView extends UserProfile {
-  email: string;
 }
 
 

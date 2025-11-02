@@ -1,72 +1,44 @@
-import { supabase } from './supabaseClient';
-import { UserData, UserProfile, JournalEntry, MoodEntry, MyStory, ChatMessage, AdminUserView } from '../types';
-import { initialUserProfile } from '../App';
-import { User } from '@supabase/supabase-js';
+import { supabase, supabaseUrl, supabaseAnonKey } from './supabaseClient';
+import { UserData, UserProfile, JournalEntry, MoodEntry, MyStory, ChatMessage } from '../types';
 
-// This function now fetches all data directly from the client, bypassing Edge Functions.
-export const fetchUserDataBundle = async (user: User): Promise<UserData | null> => {
+// Helper for making secure, manual fetch requests to Supabase functions
+const invokeFunction = async (functionName: string, body?: object) => {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) throw new Error('Could not get user session.');
+    if (!session) throw new Error('User not authenticated.');
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify(body || {}), // Ensure a body is always sent
+    });
+
+    if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        throw new Error(errorBody.error || `Function invocation failed with status ${response.status}`);
+    }
+
+    // Handle cases where the function might not return a body
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+        return response.json();
+    }
+    return {};
+};
+
+// This function securely fetches all user data via an Edge Function,
+// bypassing RLS issues.
+export const fetchUserDataBundle = async (): Promise<UserData | null> => {
     try {
-        // Step 1: Get or create profile
-        let { data: profile, error: selectError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-
-        // This specific error means no row was found, which is expected for new users.
-        if (selectError && selectError.code !== 'PGRST116') {
-            throw selectError;
-        }
-
-        if (!profile) {
-            // No profile found, let's create one.
-            const newProfileData = {
-                ...initialUserProfile,
-                id: user.id,
-                name: user.email?.split('@')[0] || 'Friend',
-            };
-
-            const { data: insertedProfile, error: insertError } = await supabase
-                .from('profiles')
-                .insert(newProfileData)
-                .select()
-                .single();
-
-            if (insertError) throw insertError;
-            profile = insertedProfile;
-        }
-
-        // Step 2: Get all other data related to the user
-        const [
-            { data: journalEntries, error: journalError },
-            { data: moods, error: moodsError },
-            { data: myStories, error: storiesError },
-            { data: chatHistory, error: chatError }
-        ] = await Promise.all([
-            supabase.from('journal_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-            supabase.from('moods').select('*').eq('user_id', user.id).order('date', { ascending: false }),
-            supabase.from('my_stories').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }),
-            supabase.from('chat_history').select('*').eq('user_id', user.id).order('created_at', { ascending: true })
-        ]);
-
-        if (journalError || moodsError || storiesError || chatError) {
-            console.error('Error fetching user data parts:', { journalError, moodsError, storiesError, chatError });
-            throw new Error("One or more data components failed to load.");
-        }
-
-        // Step 3: Assemble and return the full UserData object
-        const fullUserData: UserData = {
-            ...(profile as UserProfile),
-            journalEntries: journalEntries || [],
-            moods: moods || [],
-            myStories: myStories || [],
-            chatHistory: chatHistory || [],
-        };
-
-        return fullUserData;
-
+        const data = await invokeFunction('get-user-data-bundle');
+        return data;
     } catch (error: any) {
-        console.error("Error in fetchUserDataBundle:", error.message);
+        console.error("Error invoking get-user-data-bundle:", error.message);
         return null;
     }
 }
@@ -150,33 +122,27 @@ export const addChatMessage = async (message: Omit<ChatMessage, 'id' | 'created_
     return { data, error };
 }
 
-// Fix: Add admin functions to invoke Supabase Edge Functions.
-// --- Admin ---
+// --- Admin Functions ---
+export type AdminUserView = Omit<UserProfile, 'journalEntries' | 'moods' | 'myStories' | 'chatHistory'> & { email: string };
+
 export const adminGetAllUsers = async (): Promise<AdminUserView[]> => {
-    const { data, error } = await supabase.functions.invoke('admin-get-users');
-    if (error) {
-        console.error('Error fetching all users:', error.message);
-        throw error;
+    try {
+        const data = await invokeFunction('admin-get-users');
+        return data.users;
+    } catch (error) {
+        console.error("Error invoking admin-get-users function:", error);
+        return [];
     }
-    if (data.error) {
-        throw new Error(data.error);
-    }
-    return data.users;
-};
+}
 
 export const adminUpdateUserRole = async (targetUserId: string, newRole: 'user' | 'admin'): Promise<{ success: boolean; error?: string }> => {
-    const { data, error } = await supabase.functions.invoke('admin-update-role', {
-        body: { targetUserId, newRole },
-    });
-
-    if (error) {
-        console.error('Error updating user role:', error.message);
+    try {
+        const body = { targetUserId, newRole };
+        const data = await invokeFunction('admin-update-role', body);
+        if (data.error) throw new Error(data.error);
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error invoking admin-update-role function:", error.message);
         return { success: false, error: error.message };
     }
-    
-    if (data.error) {
-        return { success: false, error: data.error };
-    }
-
-    return data;
-};
+}

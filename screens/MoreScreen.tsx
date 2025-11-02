@@ -1,18 +1,17 @@
 
 
-
-
 import React, { useContext, useState } from 'react';
-import { AppContext, AppContextType, initialUserProfile } from '../App';
+import { AppContext, AppContextType } from '../App';
 import { Program, UserData } from '../types';
 import { UsersIcon, BookOpenIcon, ChevronRightIcon, PencilIcon, LightbulbIcon } from '../components/Icons';
 import Card from '../components/Card';
+import { supabase } from '../services/supabaseClient';
 import { updateProfile } from '../services/dataService';
 
 
 const MoreScreen: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { user, userData, setUserData, navigateTo, resetToScreen } = context;
+    const { user, userData, setUserData, navigateTo } = context;
     const [isChangingProgram, setIsChangingProgram] = useState(false);
     const [feedbackMessage, setFeedbackMessage] = useState('');
 
@@ -26,25 +25,22 @@ const MoreScreen: React.FC = () => {
 
     const handleProgramSelect = async (program: Program | null) => {
         if (!user || !userData) return;
-        
-        const originalUserData = userData;
+
         const updates = { program, programDay: 1, lastTaskCompletedDate: null };
-        setUserData(prev => prev ? ({ ...prev, ...updates }) : null);
+        setUserData({ ...userData, ...updates });
         setIsChangingProgram(false);
         showFeedback("Program updated successfully!");
 
         const { error } = await updateProfile(user.id, updates);
         if (error) {
             showFeedback("Error updating program.");
-            setUserData(originalUserData);
+            // Revert optimistic update
+            setUserData(userData);
         }
     }
     
-     const handleResetAccount = () => {
-        if (window.confirm("Are you sure? This will log you out and permanently delete all your data from this device. You will need to sign up again.")) {
-            setUserData(null);
-            resetToScreen('home'); 
-        }
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
     };
     
     const showFeedback = (message: string) => {
@@ -60,8 +56,6 @@ const MoreScreen: React.FC = () => {
     const nameColor = isDawn ? 'text-dawn-primary' : 'text-dusk-primary';
     const nameBg = isDawn ? 'bg-dawn-primary/20' : 'bg-dusk-primary/20';
 
-    if (!userData) return null;
-
     return (
         <div className="space-y-6 animate-fade-in">
             {feedbackMessage && (
@@ -71,16 +65,16 @@ const MoreScreen: React.FC = () => {
             )}
             <div className="text-center">
                 <div className={`w-24 h-24 ${nameBg} rounded-full mx-auto flex items-center justify-center text-4xl font-bold ${nameColor}`}>
-                    {userData.name.charAt(0).toUpperCase()}
+                    {userData?.name.charAt(0).toUpperCase()}
                 </div>
-                <h2 className={`mt-4 text-2xl font-bold ${textColor}`}>{userData.name}</h2>
+                <h2 className={`mt-4 text-2xl font-bold ${textColor}`}>{userData?.name}</h2>
                 <p className={subTextColor}>Healing one day at a time</p>
             </div>
             
             <Card>
                 <h3 className={`font-bold ${textColor} mb-3`}>My Program</h3>
                 {isChangingProgram ? (
-                     <ProgramChanger currentProgram={userData.program} onSelect={handleProgramSelect} onCancel={() => setIsChangingProgram(false)}/>
+                     <ProgramChanger currentProgram={userData?.program} onSelect={handleProgramSelect} onCancel={() => setIsChangingProgram(false)}/>
                 ) : (
                     <div className="flex justify-between items-center">
                         <div>
@@ -117,7 +111,7 @@ const MoreScreen: React.FC = () => {
                     <SettingsItem label="Notifications & Reminders" onClick={() => showFeedback('Feature coming soon!')} />
                     <SettingsItem label="App Lock (PIN/Biometric)" onClick={() => showFeedback('Feature coming soon!')} />
                     <SettingsItem label="Export My Data" onClick={() => showFeedback('Feature coming soon!')} />
-                    <SettingsItem label="Log Out & Delete Account" isDestructive={true} onClick={handleResetAccount} />
+                    <SettingsItem label="Log Out" onClick={handleLogout} />
                 </div>
             </Card>
         </div>
@@ -128,8 +122,6 @@ const EmergencyContact: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
     const { user, userData, setUserData } = context;
     const [isEditing, setIsEditing] = useState(false);
-    
-    // Ensure userData exists before trying to access its properties
     const [contact, setContact] = useState(userData?.emergencyContact || { name: '', phone: '' });
     
     const isDawn = document.documentElement.classList.contains('theme-dawn');
@@ -140,18 +132,15 @@ const EmergencyContact: React.FC = () => {
     const handleSave = async () => {
         if (!user || !userData) return;
         
-        const originalUserData = userData;
         setUserData({ ...userData, emergencyContact: contact });
         setIsEditing(false);
 
         const { error } = await updateProfile(user.id, { emergencyContact: contact });
         if (error) {
             alert('Could not save contact.');
-            setUserData(originalUserData); // Revert
+            setUserData(userData); // Revert
         }
     };
-
-    if (!userData) return null;
 
     if (isEditing) {
         return (
@@ -185,10 +174,10 @@ const EmergencyContact: React.FC = () => {
         <div className="p-3 flex justify-between items-center">
             <div>
                 <h4 className={`font-semibold ${textColor}`}>Emergency Contact</h4>
-                <p className={`text-sm ${subTextColor}`}>{userData.emergencyContact?.name || "Not set"}</p>
+                <p className={`text-sm ${subTextColor}`}>{userData?.emergencyContact?.name || "Not set"}</p>
             </div>
             <button onClick={() => setIsEditing(true)} className={`text-sm font-bold hover:underline ${buttonTextColor}`}>
-                {userData.emergencyContact?.name ? "Edit" : "Set"}
+                {userData?.emergencyContact?.name ? "Edit" : "Set"}
             </button>
         </div>
     );

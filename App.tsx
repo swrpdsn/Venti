@@ -1,4 +1,3 @@
-
 import React, { useState, createContext, useEffect, Dispatch, SetStateAction } from 'react';
 import { UserData, Screen, UserProfile } from './types';
 import type { Session, User } from '@supabase/supabase-js';
@@ -19,7 +18,9 @@ import MyStoriesScreen from './screens/MyStoriesScreen';
 import StoryEditorScreen from './screens/StoryEditorScreen';
 import AuthScreen from './screens/AuthScreen';
 import LoadingScreen from './components/Loading';
-import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon } from './components/Icons';
+import AdminDashboardScreen from './screens/AdminDashboardScreen';
+import AccessDeniedScreen from './screens/AccessDeniedScreen';
+import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon, ShieldIcon } from './components/Icons';
 
 export const initialUserProfile: Omit<UserProfile, 'id'> = {
   name: '',
@@ -55,7 +56,11 @@ export interface AppContextType {
 
 export const AppContext = createContext<AppContextType | null>(null);
 
-const App: React.FC = () => {
+interface AppProps {
+  adminMode?: boolean;
+}
+
+const App: React.FC<AppProps> = ({ adminMode = false }) => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -75,8 +80,8 @@ const App: React.FC = () => {
   const handleUserSession = async (user: User) => {
     setLoading(true);
     try {
-        // Fetch all user data directly from client-side service
-        const fullUserData = await fetchUserDataBundle(user);
+        // Securely fetch all user data via an Edge Function to bypass broken RLS policies.
+        const fullUserData = await fetchUserDataBundle();
         if (!fullUserData) {
             throw new Error("Failed to load user data from the server.");
         }
@@ -167,12 +172,47 @@ const App: React.FC = () => {
     ? 'bg-gradient-to-br from-dawn-bg-start to-dawn-bg-end'
     : 'bg-gradient-to-br from-dusk-bg-start to-dusk-bg-end';
 
+  const contextValue: AppContextType = {
+      session,
+      user: session?.user || null,
+      userData,
+      setUserData,
+      activeScreen: adminMode ? 'admin-dashboard' : activeScreen,
+      navigationStack,
+      navigateTo,
+      goBack,
+      resetToScreen,
+      showSOS,
+      setShowSOS,
+      activeStoryId,
+      setActiveStoryId
+  };
+
   if (loading) {
       return <LoadingScreen />;
   }
 
   if (!session) {
     return <AuthScreen />;
+  }
+
+  if (adminMode) {
+      if (!userData) {
+          return <LoadingScreen />;
+      }
+      if (userData.role !== 'admin' && userData.role !== 'superadmin') {
+          return <AccessDeniedScreen />;
+      }
+      return (
+          <AppContext.Provider value={contextValue}>
+              <div className={`min-h-screen font-sans flex flex-col h-screen transition-colors duration-500 ${backgroundClass} ${theme}`}>
+                  <AdminHeader />
+                  <main className="flex-1 overflow-y-auto p-4">
+                      <AdminDashboardScreen />
+                  </main>
+              </div>
+          </AppContext.Provider>
+      );
   }
   
   if (userData && !userData.onboardingComplete) {
@@ -181,22 +221,6 @@ const App: React.FC = () => {
   
   if (session && userData && userData.onboardingComplete) {
       // Main App View
-      const contextValue: AppContextType = {
-        session,
-        user: session.user,
-        userData,
-        setUserData,
-        activeScreen,
-        navigationStack,
-        navigateTo,
-        goBack,
-        resetToScreen,
-        showSOS,
-        setShowSOS,
-        activeStoryId,
-        setActiveStoryId
-      };
-
       const renderScreen = () => {
         switch (activeScreen) {
           case 'home': return <HomeScreen />;
@@ -209,6 +233,7 @@ const App: React.FC = () => {
           case 'community-stories': return <CommunityStoriesScreen />;
           case 'my-stories': return <MyStoriesScreen />;
           case 'story-editor': return <StoryEditorScreen />;
+          case 'admin-dashboard': return <AdminDashboardScreen />;
           default: return <HomeScreen />;
         }
       };
@@ -233,12 +258,38 @@ const App: React.FC = () => {
   return <LoadingScreen />;
 };
 
+const AdminHeader: React.FC = () => {
+  const handleLogout = () => supabase.auth.signOut();
+  const isDawn = document.documentElement.classList.contains('theme-dawn');
+  const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
+  const headerBg = isDawn ? 'bg-white/20' : 'bg-black/20';
+  
+  return (
+    <header className={`flex items-center justify-between p-4 ${headerBg} backdrop-blur-sm sticky top-0 z-10`}>
+      <div className="flex items-center space-x-2">
+        <ShieldIcon className={`w-6 h-6 ${textColor}`} />
+        <h1 className={`text-xl font-bold ${textColor}`}>Venti Admin</h1>
+      </div>
+      <div>
+        <button 
+          onClick={handleLogout}
+          className="bg-red-500 text-white px-3 py-1.5 rounded-full font-bold flex items-center space-x-1.5 shadow-md hover:bg-red-600 transition-colors"
+          aria-label="Log out"
+        >
+          <span>Log Out</span>
+        </button>
+      </div>
+    </header>
+  );
+};
+
+
 const Header: React.FC = () => {
   const context = React.useContext(AppContext);
   if (!context) return null;
   const { setShowSOS, goBack, activeScreen } = context;
 
-  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more'].includes(activeScreen);
+  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more', 'admin-dashboard'].includes(activeScreen);
   const isDawn = document.documentElement.classList.contains('theme-dawn');
 
   const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
@@ -283,6 +334,11 @@ const BottomNav: React.FC = () => {
     { screen: 'programs', label: 'Program', icon: ProgramsIcon },
     { screen: 'more', label: 'More', icon: MoreIcon },
   ];
+
+  if (userData?.role === 'admin' || userData?.role === 'superadmin') {
+      const moreIndex = navItems.findIndex(item => item.screen === 'more');
+      navItems.splice(moreIndex, 0, { screen: 'admin-dashboard', label: 'Admin', icon: ShieldIcon });
+  }
   
   const isDawn = document.documentElement.classList.contains('theme-dawn');
   const baseBg = isDawn ? 'bg-white/80' : 'bg-slate-800/60';
