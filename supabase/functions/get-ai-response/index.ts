@@ -6,7 +6,7 @@ import { type UserData, type ChatMessage } from '../../../types.ts'
 
 // The createPersonalizedSystemInstruction logic is now on the server
 const createPersonalizedSystemInstruction = (userData: UserData): string => {
-    const { name, breakupContext, ex_name, program } = userData;
+    const { name, breakupContext, exName, program } = userData;
       
     const programDetails: Record<string, string> = {
       'healing': 'The user is focused on calm healing, meditations, and journaling.',
@@ -20,7 +20,7 @@ const createPersonalizedSystemInstruction = (userData: UserData): string => {
 Your user's name is ${name}. You are helping them through a breakup.
 
 Here is their context, which you must use to personalize your conversation:
-- The chapter of their life involving their ex is called "${ex_name}". Refer to the ex-partner or this period using this term when appropriate.
+- The chapter of their life involving their ex is called "${exName}". Refer to the ex-partner or this period using this term when appropriate.
 - Reason for breakup: "${breakupContext.reason}".
 - Their chosen 30-day program is: "${programInfo}". Align your advice with this goal.
 

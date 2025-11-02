@@ -18,7 +18,7 @@ export interface UserProfile {
     redFlags: 'yes' | 'no' | 'unsure' | '';
     feelings: string[];
   };
-  ex_name: string;
+  exName: string;
   shieldList: string[];
   baseline: {
     mood: number;
