@@ -3,8 +3,8 @@ import { supabase } from '../services/supabaseClient';
 
 const AuthScreen: React.FC = () => {
     const [view, setView] = useState<'login' | 'forgot_password'>('login');
-    const [email, setEmail] = useState('dasanswarup@gmail.com');
-    const [password, setPassword] = useState('Afstro@123');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [currentAction, setCurrentAction] = useState<'login' | 'signup' | 'reset' | null>(null);
     const [error, setError] = useState<string | null>(null);
