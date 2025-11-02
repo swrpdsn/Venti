@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 const AuthScreen: React.FC = () => {
+    const [view, setView] = useState<'login' | 'forgot_password'>('login');
     const [email, setEmail] = useState('dasanswarup@gmail.com');
     const [password, setPassword] = useState('Afstro@123');
     const [loading, setLoading] = useState(false);
-    const [currentAction, setCurrentAction] = useState<'login' | 'signup' | null>(null);
+    const [currentAction, setCurrentAction] = useState<'login' | 'signup' | 'reset' | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
 
@@ -34,7 +35,26 @@ const AuthScreen: React.FC = () => {
             setError(error.error_description || error.message);
         } finally {
             setLoading(false);
-            // Let currentAction persist to show which button was pressed
+        }
+    };
+
+    const handlePasswordReset = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setCurrentAction('reset');
+        setError(null);
+        setMessage(null);
+
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.href.split('?')[0], // Redirect to the app's base URL
+            });
+            if (error) throw error;
+            setMessage("Password reset link sent! Please check your email.");
+        } catch (error: any) {
+            setError(error.error_description || error.message);
+        } finally {
+            setLoading(false);
         }
     };
     
@@ -48,20 +68,50 @@ const AuthScreen: React.FC = () => {
     const loginButtonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
     const signupButtonClass = isDawn ? 'bg-dawn-secondary text-white hover:bg-dawn-secondary/90' : 'bg-dusk-secondary text-dusk-bg-start hover:bg-dusk-secondary/90';
 
-    return (
-        <div className={`min-h-screen font-sans flex flex-col items-center justify-center p-4 transition-colors duration-500 ${backgroundClass}`}>
-             <div className="text-center mb-8">
-                <h1 className={`text-6xl font-thin tracking-[0.2em] uppercase ${isDawn ? 'text-dawn-text/80' : 'text-dusk-text/80'}`}>
-                  VENTI
-                </h1>
-                <p className={`mt-2 text-lg tracking-wider italic ${isDawn ? 'text-dawn-text/80' : 'text-dusk-text/80'}`}>
-                  Your healing journey starts here.
-                </p>
-            </div>
 
-            <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
+    const renderContent = () => {
+        if (view === 'forgot_password') {
+            return (
+                <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
+                    <h2 className={`text-2xl font-bold text-center mb-6 ${textColor}`}>
+                        Reset Password
+                    </h2>
+                    <form onSubmit={handlePasswordReset} className="space-y-4">
+                        <p className={`text-sm text-center ${isDawn ? 'text-slate-600' : 'text-slate-400'}`}>
+                            Enter your email and we'll send you a link to reset your password.
+                        </p>
+                        <input
+                            type="email"
+                            placeholder="Email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className={inputClass}
+                            required
+                        />
+                        <div className="pt-2">
+                             <button type="submit" disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${loginButtonClass}`}>
+                                {loading && currentAction === 'reset' ? 'Sending...' : 'Send Reset Link'}
+                            </button>
+                        </div>
+                        {error && <p className="text-red-400 text-sm text-center mt-2">{error}</p>}
+                        {message && <p className="text-green-500 text-sm text-center mt-2">{message}</p>}
+                    </form>
+                    <div className="text-center mt-4">
+                        <button
+                            onClick={() => { setView('login'); setError(null); setMessage(null); }}
+                            className={`text-sm hover:underline ${isDawn ? 'text-slate-600' : 'text-slate-400'}`}
+                        >
+                            Back to Log In
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+             <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
                 <h2 className={`text-2xl font-bold text-center mb-6 ${textColor}`}>
-                    Welcome to Venti
+                    Welcome Back
                 </h2>
                 <div className="space-y-4">
                     <input
@@ -88,11 +138,32 @@ const AuthScreen: React.FC = () => {
                              {loading && currentAction === 'signup' ? 'Signing up...' : 'Sign Up'}
                         </button>
                     </div>
-
                     {error && <p className="text-red-400 text-sm text-center mt-2">{error}</p>}
                     {message && <p className="text-green-500 text-sm text-center mt-2">{message}</p>}
                 </div>
+                <div className="text-center mt-4">
+                    <button
+                        onClick={() => { setView('forgot_password'); setError(null); setMessage(null); }}
+                        className={`text-sm hover:underline ${isDawn ? 'text-slate-600' : 'text-slate-400'}`}
+                    >
+                        Forgot your password?
+                    </button>
+                </div>
             </div>
+        );
+    };
+
+    return (
+        <div className={`min-h-screen font-sans flex flex-col items-center justify-center p-4 transition-colors duration-500 ${backgroundClass}`}>
+             <div className="text-center mb-8">
+                <h1 className={`text-6xl font-thin tracking-[0.2em] uppercase ${isDawn ? 'text-dawn-text/80' : 'text-dusk-text/80'}`}>
+                  VENTI
+                </h1>
+                <p className={`mt-2 text-lg tracking-wider italic ${isDawn ? 'text-dawn-text/80' : 'text-dusk-text/80'}`}>
+                  Your healing journey starts here.
+                </p>
+            </div>
+            {renderContent()}
         </div>
     );
 };
