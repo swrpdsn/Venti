@@ -32,7 +32,11 @@ const AuthScreen: React.FC = () => {
                 throw authError;
             }
         } catch (error: any) {
-            setError(error.error_description || error.message);
+            if (error.message && error.message.includes('Email not confirmed')) {
+                setError("Your email is not confirmed. Please check your inbox for a confirmation link.");
+            } else {
+                setError(error.error_description || error.message);
+            }
         } finally {
             setLoading(false);
         }
