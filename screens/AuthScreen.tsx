@@ -1,173 +1,123 @@
+
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 
 const AuthScreen: React.FC = () => {
-    const [view, setView] = useState<'login' | 'forgot_password'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [currentAction, setCurrentAction] = useState<'login' | 'signup' | 'reset' | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [message, setMessage] = useState<string | null>(null);
+    const [mode, setMode] = useState<'login' | 'signup'>('signup'); // Default to signup for new users
 
-    const handleAuth = async (action: 'login' | 'signup') => {
-        setLoading(true);
-        setCurrentAction(action);
-        setError(null);
-        setMessage(null);
-
-        try {
-            let authError;
-            if (action === 'signup') {
-                const { error } = await supabase.auth.signUp({ email, password });
-                authError = error;
-                if (!authError) {
-                    setMessage("Sign-up successful! Please check your email to confirm your account before logging in.");
-                }
-            } else {
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
-                authError = error;
-            }
-            if (authError) {
-                throw authError;
-            }
-        } catch (error: any) {
-            if (error.message && error.message.includes('Email not confirmed')) {
-                setError("Your email is not confirmed. Please check your inbox for a confirmation link.");
-            } else {
-                setError(error.error_description || error.message);
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handlePasswordReset = async (e: React.FormEvent) => {
+    const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setCurrentAction('reset');
         setError(null);
-        setMessage(null);
 
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.href.split('?')[0], // Redirect to the app's base URL
-            });
-            if (error) throw error;
-            setMessage("Password reset link sent! Please check your email.");
-        } catch (error: any) {
-            setError(error.error_description || error.message);
+            if (mode === 'signup') {
+                const { error: signUpError } = await supabase.auth.signUp({ 
+                    email, 
+                    password,
+                });
+                if (signUpError) throw signUpError;
+                setError("Account created! You can now Log In.");
+                setMode('login');
+            } else {
+                const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+                if (signInError) {
+                    if (signInError.message === 'Invalid login credentials') {
+                        throw new Error("Credentials invalid. If you haven't created an account, switch to 'Sign Up' above.");
+                    }
+                    throw signInError;
+                }
+            }
+        } catch (err: any) {
+            setError(err.message || "Authentication failed.");
         } finally {
             setLoading(false);
         }
     };
-    
+
     const isDawn = document.documentElement.classList.contains('theme-dawn');
-    const backgroundClass = isDawn
-      ? 'bg-gradient-to-br from-dawn-bg-start to-dawn-bg-end'
-      : 'bg-gradient-to-br from-dusk-bg-start to-dusk-bg-end';
+    const accentColor = isDawn ? 'bg-dawn-primary' : 'bg-dusk-primary';
+    const accentText = isDawn ? 'text-white' : 'text-dusk-bg-start';
     const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
-    const cardClass = isDawn ? 'bg-white/70' : 'bg-slate-800/40';
-    const inputClass = `w-full p-3 border rounded-md focus:ring-2 focus:border-transparent ${isDawn ? 'bg-white border-slate-300 text-slate-800 focus:ring-dawn-primary' : 'bg-slate-900/50 border-slate-700 text-dusk-text focus:ring-dusk-primary'}`;
-    const loginButtonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
-    const signupButtonClass = isDawn ? 'bg-dawn-secondary text-white hover:bg-dawn-secondary/90' : 'bg-dusk-secondary text-dusk-bg-start hover:bg-dusk-secondary/90';
-
-
-    const renderContent = () => {
-        if (view === 'forgot_password') {
-            return (
-                <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
-                    <h2 className={`text-2xl font-bold text-center mb-6 ${textColor}`}>
-                        Reset Password
-                    </h2>
-                    <form onSubmit={handlePasswordReset} className="space-y-4">
-                        <p className={`text-sm text-center ${isDawn ? 'text-slate-600' : 'text-slate-400'}`}>
-                            Enter your email and we'll send you a link to reset your password.
-                        </p>
-                        <input
-                            type="email"
-                            placeholder="Email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className={inputClass}
-                            required
-                        />
-                        <div className="pt-2">
-                             <button type="submit" disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${loginButtonClass}`}>
-                                {loading && currentAction === 'reset' ? 'Sending...' : 'Send Reset Link'}
-                            </button>
-                        </div>
-                        {error && <p className="text-red-400 text-sm text-center mt-2">{error}</p>}
-                        {message && <p className="text-green-500 text-sm text-center mt-2">{message}</p>}
-                    </form>
-                    <div className="text-center mt-4">
-                        <button
-                            onClick={() => { setView('login'); setError(null); setMessage(null); }}
-                            className={`text-sm hover:underline ${isDawn ? 'text-slate-600' : 'text-slate-400'}`}
-                        >
-                            Back to Log In
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-
-        return (
-             <div className={`w-full max-w-sm p-8 rounded-xl shadow-md backdrop-blur-sm border border-white/10 ${cardClass}`}>
-                <h2 className={`text-2xl font-bold text-center mb-6 ${textColor}`}>
-                    Welcome Back
-                </h2>
-                <div className="space-y-4">
-                    <input
-                        type="email"
-                        placeholder="Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={inputClass}
-                        required
-                    />
-                    <input
-                        type="password"
-                        placeholder="Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={inputClass}
-                        required
-                    />
-                    <div className="space-y-3 pt-2">
-                        <button onClick={() => handleAuth('login')} disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${loginButtonClass}`}>
-                             {loading && currentAction === 'login' ? 'Logging in...' : 'Log In'}
-                        </button>
-                        <button onClick={() => handleAuth('signup')} disabled={loading} className={`w-full font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 ${signupButtonClass}`}>
-                             {loading && currentAction === 'signup' ? 'Signing up...' : 'Sign Up'}
-                        </button>
-                    </div>
-                    {error && <p className="text-red-400 text-sm text-center mt-2">{error}</p>}
-                    {message && <p className="text-green-500 text-sm text-center mt-2">{message}</p>}
-                </div>
-                <div className="text-center mt-4">
-                    <button
-                        onClick={() => { setView('forgot_password'); setError(null); setMessage(null); }}
-                        className={`text-sm hover:underline ${isDawn ? 'text-slate-600' : 'text-slate-400'}`}
-                    >
-                        Forgot your password?
-                    </button>
-                </div>
-            </div>
-        );
-    };
+    const cardBg = isDawn ? 'bg-white/80' : 'bg-slate-800/60';
+    const tabActive = isDawn ? 'bg-white text-dawn-primary' : 'bg-slate-700 text-dusk-primary';
+    const tabInactive = 'text-slate-500 hover:text-slate-300';
 
     return (
-        <div className={`min-h-screen font-sans flex flex-col items-center justify-center p-4 transition-colors duration-500 ${backgroundClass}`}>
-             <div className="text-center mb-8">
-                <h1 className={`text-6xl font-thin tracking-[0.2em] uppercase ${isDawn ? 'text-dawn-text/80' : 'text-dusk-text/80'}`}>
-                  VENTI
-                </h1>
-                <p className={`mt-2 text-lg tracking-wider italic ${isDawn ? 'text-dawn-text/80' : 'text-dusk-text/80'}`}>
-                  Your healing journey starts here.
-                </p>
+        <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+            <div className="absolute inset-0 z-0">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-teal/10 rounded-full blur-3xl animate-breathe-in"></div>
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-brand-purple/10 rounded-full blur-3xl animate-breathe-out"></div>
             </div>
-            {renderContent()}
+
+            <div className={`w-full max-w-md p-1 rounded-3xl backdrop-blur-xl border border-white/10 shadow-2xl z-10 ${cardBg}`}>
+                <div className="flex p-1 space-x-1">
+                    <button 
+                        onClick={() => { setMode('login'); setError(null); }}
+                        className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${mode === 'login' ? tabActive : tabInactive}`}
+                    >
+                        Log In
+                    </button>
+                    <button 
+                        onClick={() => { setMode('signup'); setError(null); }}
+                        className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${mode === 'signup' ? tabActive : tabInactive}`}
+                    >
+                        Sign Up
+                    </button>
+                </div>
+
+                <div className="px-8 pb-8 pt-6">
+                    <div className="text-center mb-8">
+                        <h1 className={`text-5xl font-thin tracking-widest uppercase ${textColor} mb-2`}>Venti</h1>
+                        <p className="text-slate-500 text-sm italic">
+                            {mode === 'login' ? 'Welcome back. Take a deep breath.' : 'Begin your anonymous healing journey.'}
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-widest text-slate-500 ml-2 font-bold">Email Address</label>
+                            <input
+                                type="email"
+                                placeholder="name@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full bg-black/20 border border-white/5 rounded-2xl p-4 text-white placeholder-slate-600 focus:border-brand-teal outline-none transition-all"
+                                required
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-widest text-slate-500 ml-2 font-bold">Password</label>
+                            <input
+                                type="password"
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full bg-black/20 border border-white/5 rounded-2xl p-4 text-white placeholder-slate-600 focus:border-brand-teal outline-none transition-all"
+                                required
+                            />
+                        </div>
+
+                        {error && (
+                            <div className={`p-4 rounded-xl text-sm leading-relaxed ${error.includes('Success') || error.includes('created') ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                {error}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className={`w-full ${accentColor} ${accentText} font-black py-4 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 uppercase tracking-widest mt-4`}
+                        >
+                            {loading ? 'Processing...' : mode === 'login' ? 'Enter Space' : 'Create Account'}
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     );
 };

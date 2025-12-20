@@ -1,12 +1,10 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext, AppContextType } from '../App';
 import { JournalEntry } from '../types';
-import { TrashIcon, SparklesIcon } from '../components/Icons';
-import { getAIWeeklySummary } from '../services/geminiService';
+import { TrashIcon, SparklesIcon, CloseIcon } from '../components/Icons';
+import { getAIWeeklySummary, getReframeInsight } from '../services/geminiService';
 import Card from '../components/Card';
-import { addJournalEntry, deleteJournalEntry, addOrUpdateMood } from '../services/dataService';
-
-// NOTE: Recharts is loaded from CDN and accessed via window.Recharts
+import { addJournalEntry, deleteJournalEntry } from '../services/dataService';
 
 type JournalTab = 'guided' | 'free' | 'mood';
 
@@ -35,10 +33,9 @@ const JournalScreen: React.FC = () => {
     const baseText = isDawn ? 'text-slate-500' : 'text-slate-400';
     const hoverText = isDawn ? 'hover:text-dawn-text' : 'hover:text-dusk-text';
 
-
     return (
-        <div>
-            <div className={`flex space-x-1 border-b-2 ${baseBorder} mb-4`}>
+        <div className="h-full flex flex-col">
+            <div className={`flex space-x-1 border-b-2 ${baseBorder} mb-4 shrink-0`}>
                 {tabs.map(tab => (
                     <button 
                         key={tab.id}
@@ -49,7 +46,7 @@ const JournalScreen: React.FC = () => {
                     </button>
                 ))}
             </div>
-            <div className="animate-fade-in">{renderContent()}</div>
+            <div className="flex-1 overflow-y-auto animate-fade-in pb-20">{renderContent()}</div>
         </div>
     );
 };
@@ -67,17 +64,16 @@ const GuidedJournal: React.FC<{ setActiveTab: (tab: JournalTab) => void }> = ({ 
             user_id: user.id,
             prompt,
             content,
-            mood: 5, // Default mood
+            mood: 5,
         };
 
         const { data: newEntry, error } = await addJournalEntry(newEntryData);
 
         if (error || !newEntry) {
-            alert('Could not save entry. Please try again.');
+            alert('Could not save entry.');
         } else {
             setUserData(prev => prev ? ({ ...prev, journalEntries: [newEntry, ...prev.journalEntries] }) : null);
             setContent('');
-            alert('Entry Saved!');
             setActiveTab('free');
         }
     };
@@ -85,20 +81,20 @@ const GuidedJournal: React.FC<{ setActiveTab: (tab: JournalTab) => void }> = ({ 
     const isDawn = document.documentElement.classList.contains('theme-dawn');
 
     return (
-        <Card>
+        <Card className="m-1">
             <p className={`font-semibold ${isDawn ? 'text-dawn-text' : 'text-dusk-text'} mb-2`}>{prompt}</p>
             <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className={`w-full h-48 p-2 border rounded-md focus:ring-2 resize-none
+                className={`w-full h-48 p-3 border rounded-2xl focus:ring-2 resize-none outline-none transition-all
                     ${isDawn 
-                        ? 'bg-white border-slate-300 focus:ring-dawn-primary focus:border-transparent' 
+                        ? 'bg-white border-slate-200 focus:ring-dawn-primary focus:border-transparent' 
                         : 'bg-slate-900/50 border-slate-700 text-dusk-text focus:ring-dusk-primary focus:border-transparent'}`}
-                placeholder="Write your thoughts here..."
+                placeholder="Pour your heart out..."
             />
-            <button onClick={saveEntry} className={`mt-2 w-full font-bold py-2 px-4 rounded-lg transition-colors
-                 ${isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90'}`}>
-                Save Entry
+            <button onClick={saveEntry} className={`mt-4 w-full font-bold py-4 rounded-2xl transition-all shadow-lg active:scale-95
+                 ${isDawn ? 'bg-dawn-primary text-white' : 'bg-dusk-primary text-dusk-bg-start'}`}>
+                Save Reflection
             </button>
         </Card>
     );
@@ -107,46 +103,71 @@ const GuidedJournal: React.FC<{ setActiveTab: (tab: JournalTab) => void }> = ({ 
 const FreeJournal: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
     const { userData, setUserData } = context;
+    const [reframeInsight, setReframeInsight] = useState<string | null>(null);
+    const [isReframing, setIsReframing] = useState(false);
 
     const deleteEntry = async (id: number) => {
-        const originalEntries = userData?.journalEntries ? [...userData.journalEntries] : [];
-
-        // Optimistic update
-        setUserData(prev => prev ? ({
-            ...prev,
-            journalEntries: prev.journalEntries.filter(entry => entry.id !== id)
-        }) : null);
-
+        if (!window.confirm("Permanently delete this entry?")) return;
         const { error } = await deleteJournalEntry(id);
-        if (error) {
-            alert('Could not delete entry. Please try again.');
-            // Revert state
-            setUserData(prev => prev ? ({ ...prev, journalEntries: originalEntries }) : null);
-        }
+        if (error) alert("Error deleting entry.");
+        else setUserData(prev => prev ? ({ ...prev, journalEntries: prev.journalEntries.filter(e => e.id !== id) }) : null);
+    };
+
+    const handleReframe = async (text: string) => {
+        setIsReframing(true);
+        const insight = await getReframeInsight(text);
+        setReframeInsight(insight);
+        setIsReframing(false);
     };
     
     const isDawn = document.documentElement.classList.contains('theme-dawn');
     const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
     const subTextColor = isDawn ? 'text-slate-500' : 'text-slate-400';
-    const promptColor = isDawn ? 'text-dawn-secondary' : 'text-dusk-secondary';
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 px-1">
+            {reframeInsight && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-fade-in">
+                    <Card className="max-w-sm w-full relative">
+                        <button onClick={() => setReframeInsight(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+                            <CloseIcon className="w-6 h-6" />
+                        </button>
+                        <div className="flex items-center space-x-2 mb-4">
+                            <SparklesIcon className="w-6 h-6 text-brand-teal" />
+                            <h4 className="font-black text-brand-teal uppercase tracking-widest text-xs">Venti's Reframe</h4>
+                        </div>
+                        <p className={`italic font-serif text-lg leading-relaxed ${textColor}`}>"{reframeInsight}"</p>
+                    </Card>
+                </div>
+            )}
+
             {userData?.journalEntries.length === 0 ? (
-                <Card>
-                    <p className={subTextColor}>No entries yet. Start by answering a guided prompt or writing whatever is on your mind.</p>
+                <Card className="text-center py-10 opacity-60">
+                    <p className={subTextColor}>Your journal is empty. Start your first reflection above.</p>
                 </Card>
             ) : (
                 userData?.journalEntries.map(entry => (
-                    <Card key={entry.id}>
-                        <div className="relative">
-                           <p className={`text-sm ${subTextColor}`}>{new Date(entry.created_at).toLocaleString()}</p>
-                           {entry.prompt && <p className={`font-semibold mt-1 italic ${promptColor}`}>"{entry.prompt}"</p>}
-                           <p className={`mt-2 whitespace-pre-wrap ${textColor}`}>{entry.content}</p>
-                           <button onClick={() => deleteEntry(entry.id)} aria-label="Delete entry" className={`absolute top-0 right-0 p-1 rounded-full ${isDawn ? 'text-slate-400 hover:text-red-500 hover:bg-red-100' : 'text-slate-500 hover:text-red-400 hover:bg-red-900/50'}`}>
-                               <TrashIcon className="w-5 h-5"/>
-                           </button>
+                    <Card key={entry.id} className="relative group overflow-hidden">
+                        <div className="flex justify-between items-start mb-2">
+                           <p className={`text-[10px] font-black uppercase tracking-tighter ${subTextColor}`}>
+                                {new Date(entry.created_at).toLocaleDateString()} at {new Date(entry.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                           </p>
+                           <div className="flex items-center space-x-1">
+                               <button 
+                                    onClick={() => handleReframe(entry.content)} 
+                                    disabled={isReframing}
+                                    title="Reframe this thought with Venti"
+                                    className={`p-2 rounded-full transition-all ${isReframing ? 'animate-spin' : ''} ${isDawn ? 'text-brand-teal hover:bg-brand-teal/10' : 'text-brand-teal hover:bg-brand-teal/20'}`}
+                                >
+                                    <SparklesIcon className="w-4 h-4" />
+                               </button>
+                               <button onClick={() => deleteEntry(entry.id)} className={`p-2 rounded-full transition-all ${isDawn ? 'text-slate-300 hover:text-red-500 hover:bg-red-50' : 'text-slate-600 hover:text-red-400 hover:bg-red-900/20'}`}>
+                                   <TrashIcon className="w-4 h-4"/>
+                               </button>
+                           </div>
                         </div>
+                        {entry.prompt && <p className={`font-black text-xs mb-2 ${isDawn ? 'text-brand-purple' : 'text-brand-light-purple'}`}>{entry.prompt}</p>}
+                        <p className={`whitespace-pre-wrap leading-relaxed ${textColor}`}>{entry.content}</p>
                     </Card>
                 ))
             )}
@@ -156,148 +177,80 @@ const FreeJournal: React.FC = () => {
 
 const MoodTracker: React.FC = () => {
     const context = useContext(AppContext) as AppContextType;
-    const { user, userData, setUserData } = context;
+    const { userData, setUserData } = context;
     const [mood, setMood] = useState(5);
     const [summary, setSummary] = useState<string | null>(null);
     const [isSummaryLoading, setIsSummaryLoading] = useState(false);
-    const [feedback, setFeedback] = useState('');
     
     const isDawn = document.documentElement.classList.contains('theme-dawn');
     const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
     const subTextColor = isDawn ? 'text-slate-600' : 'text-slate-400';
-    const buttonClass = isDawn ? 'bg-dawn-secondary text-white hover:bg-dawn-secondary/90' : 'bg-dusk-secondary text-dusk-bg-start hover:bg-dusk-secondary/90';
-    const aiButtonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
-    const summaryBg = isDawn ? 'bg-slate-100' : 'bg-slate-900/50';
 
-    // @ts-ignore - Recharts is loaded from CDN
+    // @ts-ignore
     const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = window.Recharts || {};
-    
-    const showFeedback = (message: string) => {
-        setFeedback(message);
-        setTimeout(() => setFeedback(''), 3000);
-    }
-
-    const addMoodEntry = async () => {
-        if (!user || !userData) return;
-        const today = new Date().toISOString().split('T')[0];
-        const newEntry = { user_id: user.id, date: today, mood };
-        const originalUserData = userData;
-
-        const { data, error } = await addOrUpdateMood(newEntry);
-        if (error) {
-            showFeedback("Error logging mood. Please try again.");
-        } else if (data) {
-            setUserData(prev => {
-                if (!prev) return null;
-                const newMoods = [...originalUserData.moods];
-                const existingIndex = newMoods.findIndex(m => m.date === today);
-                if (existingIndex > -1) {
-                    newMoods[existingIndex] = data;
-                } else {
-                    newMoods.push(data);
-                }
-                return { ...prev, moods: newMoods };
-            });
-            showFeedback('Mood logged for today!');
-        }
-    };
 
     const handleGetSummary = async () => {
         if (!userData) return;
         setIsSummaryLoading(true);
-        setSummary(null);
-
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-        const recentEntries = userData.journalEntries.filter(entry => new Date(entry.created_at) >= oneWeekAgo);
-        const recentMoods = userData.moods.filter(mood => new Date(mood.date) >= oneWeekAgo);
-
-        if (recentEntries.length < 2 && recentMoods.length < 2) {
-            setSummary("Keep tracking your mood and writing in your journal for a few more days to unlock your first weekly summary!");
-            setIsSummaryLoading(false);
-            return;
-        }
-
-        const generatedSummary = await getAIWeeklySummary(recentEntries, recentMoods);
+        const generatedSummary = await getAIWeeklySummary(userData.journalEntries, userData.moods);
         setSummary(generatedSummary);
         setIsSummaryLoading(false);
     };
     
     const chartData = useMemo(() => {
         if (!userData) return [];
-        return userData.moods.slice().sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-7).map(m => ({
-            name: new Date(m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        return [...userData.moods].reverse().slice(-7).map(m => ({
+            name: new Date(m.date).toLocaleDateString('en-US', { weekday: 'short' }),
             mood: m.mood
         }));
-    }, [userData?.moods]);
-
+    }, [userData]);
 
     return (
-        <div className="space-y-4">
-             <Card>
-                <h3 className={`font-bold mb-2 ${textColor}`}>How are you feeling today?</h3>
-                 {feedback && <p className="text-center text-sm text-green-600 mb-2">{feedback}</p>}
-                <div className="flex items-center space-x-2 sm:space-x-4">
-                    <span className="text-2xl">😔</span>
-                    <input type="range" min="1" max="10" value={mood} onChange={(e) => setMood(Number(e.target.value))} className="w-full"/>
-                    <span className="text-2xl">🙂</span>
-                </div>
-                <button onClick={addMoodEntry} className={`mt-4 w-full font-bold py-2 px-4 rounded-lg transition-colors ${buttonClass}`}>
-                    Log Mood ({mood})
-                </button>
-            </Card>
+        <div className="space-y-4 px-1 pb-10">
             <Card>
-                <h3 className={`font-bold mb-4 ${textColor}`}>Weekly Mood Trend</h3>
+                <h3 className={`font-bold mb-4 ${textColor}`}>Weekly Trend</h3>
                 <div style={{ width: '100%', height: 200 }}>
                     {BarChart ? (
                         <ResponsiveContainer>
-                            <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke={isDawn ? '#e2e8f0' : '#475569'}/>
-                                <XAxis dataKey="name" tick={{ fill: isDawn ? '#475569' : '#94a3b8' }} />
-                                <YAxis domain={[0, 10]} tick={{ fill: isDawn ? '#475569' : '#94a3b8' }} />
+                            <BarChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={isDawn ? '#e2e8f0' : '#475569'} vertical={false} />
+                                <XAxis dataKey="name" tick={{ fill: isDawn ? '#475569' : '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} />
+                                <YAxis domain={[0, 10]} hide />
                                 <Tooltip
+                                    cursor={{ fill: 'transparent' }}
                                     contentStyle={{
-                                        backgroundColor: isDawn ? 'rgba(255,255,255,0.8)' : 'rgba(30,41,59,0.8)',
-                                        borderColor: isDawn ? '#e2e8f0' : '#475569',
-                                        color: textColor
+                                        backgroundColor: isDawn ? 'white' : '#1e293b',
+                                        borderRadius: '12px',
+                                        border: 'none',
+                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
                                     }}
                                 />
-                                <Bar dataKey="mood" fill={isDawn ? '#dd6b20' : '#a78bfa'} />
+                                <Bar dataKey="mood" radius={[4, 4, 0, 0]} fill={isDawn ? '#dd6b20' : '#a78bfa'} />
                             </BarChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div className="flex items-center justify-center h-full">
-                            <p className={subTextColor}>Loading chart...</p>
-                        </div>
+                        <div className="flex items-center justify-center h-full opacity-40">Loading chart...</div>
                     )}
                 </div>
             </Card>
-            <Card>
-                <div className="flex items-center space-x-2">
-                    <SparklesIcon className={`w-6 h-6 ${isDawn ? 'text-dawn-primary' : 'text-dusk-primary'}`} />
-                    <h3 className={`font-bold ${textColor}`}>AI Weekly Summary</h3>
+
+            <Card className="bg-gradient-to-br from-brand-teal/10 to-transparent">
+                <div className="flex items-center space-x-2 mb-2">
+                    <SparklesIcon className="w-5 h-5 text-brand-teal" />
+                    <h3 className={`font-black text-xs uppercase tracking-widest ${textColor}`}>Personalized Insight</h3>
                 </div>
-                <p className={`text-sm ${subTextColor} my-2`}>Get personalized insights based on your journal entries and mood trends from the last 7 days.</p>
+                <p className={`text-sm ${subTextColor} mb-4`}>Analyze your recent entries to find patterns in your healing journey.</p>
                 <button 
                     onClick={handleGetSummary} 
-                    disabled={isSummaryLoading} 
-                    className={`w-full font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${aiButtonClass}`}
+                    disabled={isSummaryLoading || !userData?.journalEntries.length} 
+                    className={`w-full font-bold py-3 px-4 rounded-xl transition-all disabled:opacity-40
+                        ${isDawn ? 'bg-dawn-primary text-white' : 'bg-dusk-primary text-dusk-bg-start'}`}
                 >
-                    {isSummaryLoading ? 'Analyzing...' : 'Generate My Summary'}
+                    {isSummaryLoading ? 'Consulting Venti...' : 'Generate Weekly Summary'}
                 </button>
-                {(summary || isSummaryLoading) && (
-                    <div className={`mt-4 p-3 rounded-lg ${summaryBg}`}>
-                        {isSummaryLoading ? (
-                             <div className="flex items-center justify-center space-x-1">
-                                <p className={textColor}>Thinking...</p>
-                                <div className={`w-2 h-2 ${isDawn ? 'bg-slate-500' : 'bg-slate-400'} rounded-full animate-pulse`}></div>
-                                <div className={`w-2 h-2 ${isDawn ? 'bg-slate-500' : 'bg-slate-400'} rounded-full animate-pulse [animation-delay:0.2s]`}></div>
-                                <div className={`w-2 h-2 ${isDawn ? 'bg-slate-500' : 'bg-slate-400'} rounded-full animate-pulse [animation-delay:0.4s]`}></div>
-                            </div>
-                        ) : (
-                             <p className={`${textColor} whitespace-pre-wrap`}>{summary}</p>
-                        )}
+                {summary && (
+                    <div className={`mt-6 p-4 rounded-2xl border ${isDawn ? 'bg-white/50 border-slate-100' : 'bg-slate-900/50 border-slate-700'} animate-fade-in`}>
+                         <p className={`${textColor} whitespace-pre-wrap leading-relaxed italic font-serif`}>{summary}</p>
                     </div>
                 )}
             </Card>

@@ -1,8 +1,10 @@
-import React, { useContext, useState, useMemo } from 'react';
+import React, { useContext, useState, useMemo, useEffect } from 'react';
 import { AppContext, AppContextType } from '../App';
 import { Program } from '../types';
 import Card from '../components/Card';
 import { addOrUpdateMood, updateProfile } from '../services/dataService';
+import { getDailyInsight } from '../services/geminiService';
+import { SparklesIcon } from '../components/Icons';
 
 interface ProgramTask {
     title: string;
@@ -65,6 +67,8 @@ const HomeScreen: React.FC = () => {
     const { user, userData, setUserData } = context;
     const [mood, setMood] = useState(5);
     const [feedbackMessage, setFeedbackMessage] = useState('');
+    const [dailyInsight, setDailyInsight] = useState<string | null>(null);
+    const [isInsightLoading, setIsInsightLoading] = useState(false);
     
     const today = new Date().toISOString().split('T')[0];
     const isTaskCompletedToday = userData.lastTaskCompletedDate === today;
@@ -78,6 +82,16 @@ const HomeScreen: React.FC = () => {
         const dayIndex = getDayOfYear();
         return bridgeActions[dayIndex % bridgeActions.length];
     }, []);
+
+    useEffect(() => {
+        const fetchInsight = async () => {
+            setIsInsightLoading(true);
+            const insight = await getDailyInsight(userData);
+            setDailyInsight(insight);
+            setIsInsightLoading(false);
+        };
+        fetchInsight();
+    }, [userData.id, userData.programDay]);
     
     const showFeedback = (message: string) => {
         setFeedbackMessage(message);
@@ -89,10 +103,8 @@ const HomeScreen: React.FC = () => {
     const addMoodEntry = async () => {
         if (!user) return;
         const newEntry = { user_id: user.id, date: today, mood };
-        
         const originalUserData = userData;
 
-        // Optimistic UI update
         setUserData(prev => {
             if (!prev) return null;
             const existingEntryIndex = prev.moods.findIndex(m => m.date === today);
@@ -100,7 +112,6 @@ const HomeScreen: React.FC = () => {
             if (existingEntryIndex > -1) {
                 newMoods[existingEntryIndex] = { ...newMoods[existingEntryIndex], ...newEntry };
             } else {
-                // Mock an ID for the optimistic update
                 newMoods.push({ id: Date.now(), created_at: new Date().toISOString(), ...newEntry });
             }
             return { ...prev, moods: newMoods };
@@ -108,25 +119,23 @@ const HomeScreen: React.FC = () => {
 
         const { data, error } = await addOrUpdateMood(newEntry);
         if (error) {
-            showFeedback("Error logging mood. Please try again.");
-            setUserData(originalUserData); // Revert on error
+            showFeedback("Error logging mood.");
+            setUserData(originalUserData);
         } else if (data) {
-            // Update local state with actual data from DB
             setUserData(prev => {
                 if (!prev) return null;
                 const newMoods = originalUserData.moods.filter(m => m.date !== today);
                 newMoods.push(data);
                 return { ...prev, moods: newMoods };
             });
+            showFeedback("Mood logged. Thanks for checking in.");
         }
-        showFeedback("Mood for today logged. Great job checking in!");
     };
     
     const handleCompleteTask = async () => {
         if (isTaskCompletedToday || !user) return;
 
         const originalUserData = userData;
-
         const updates = {
             programDay: Math.min(30, userData.programDay + 1),
             lastTaskCompletedDate: today,
@@ -137,35 +146,23 @@ const HomeScreen: React.FC = () => {
         };
 
         setUserData(prev => prev ? ({ ...prev, ...updates }) : null);
-        showFeedback("Task complete! One step forward.");
+        showFeedback("Task complete!");
 
         const { error } = await updateProfile(user.id, updates);
         if (error) {
-            showFeedback("Error saving progress. Please try again.");
-            // Revert optimistic update
-             setUserData(originalUserData);
+            showFeedback("Error saving progress.");
+            setUserData(originalUserData);
         }
     }
     
     const isDawn = document.body.parentElement?.classList.contains('theme-dawn');
-    
-    const headerGradient = isDawn
-      ? 'from-dawn-primary/80 to-dawn-secondary/80'
-      : 'from-dusk-primary/80 to-dusk-secondary/60';
-      
+    const headerGradient = isDawn ? 'from-dawn-primary/80 to-dawn-secondary/80' : 'from-dusk-primary/80 to-dusk-secondary/60';
     const headerTextColor = isDawn ? 'text-white' : 'text-dusk-bg-start';
     const headerSubTextColor = isDawn ? 'text-white/80' : 'text-dusk-bg-start/80';
-    
     const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
     const subTextColor = isDawn ? 'text-slate-600' : 'text-slate-400';
-    
-    const buttonClass = isDawn
-      ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90'
-      : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
-      
-    const secondaryButtonClass = isDawn
-      ? 'bg-dawn-secondary/20 text-dawn-secondary hover:bg-dawn-secondary/30'
-      : 'bg-dusk-secondary/20 text-dusk-secondary hover:bg-dusk-secondary/30';
+    const buttonClass = isDawn ? 'bg-dawn-primary text-white hover:bg-dawn-primary/90' : 'bg-dusk-primary text-dusk-bg-start hover:bg-dusk-primary/90';
+    const secondaryButtonClass = isDawn ? 'bg-dawn-secondary/20 text-dawn-secondary hover:bg-dawn-secondary/30' : 'bg-dusk-secondary/20 text-dusk-secondary hover:bg-dusk-secondary/30';
 
     return (
         <div className="space-y-4">
@@ -175,10 +172,28 @@ const HomeScreen: React.FC = () => {
                 </div>
             )}
             
-            <div className={`p-6 bg-gradient-to-br ${headerGradient} rounded-2xl shadow-lg`}>
-                <h1 className={`text-3xl font-bold ${headerTextColor}`}>Hello, {userData.name}</h1>
-                <p className={`mt-1 ${headerSubTextColor}`}>Here is your gentle plan for healing today.</p>
+            <div className={`p-6 bg-gradient-to-br ${headerGradient} rounded-2xl shadow-lg relative overflow-hidden`}>
+                <div className="relative z-10">
+                    <h1 className={`text-3xl font-bold ${headerTextColor}`}>Hello, {userData.name}</h1>
+                    <p className={`mt-1 ${headerSubTextColor}`}>Your journey to heal continues today.</p>
+                </div>
+                <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+                    <SparklesIcon className="w-32 h-32" />
+                </div>
             </div>
+
+            {/* Daily Insight Card */}
+            <Card className={`${isDawn ? 'bg-amber-50/80 border-amber-200' : 'bg-indigo-900/30 border-indigo-500/30'} animate-fade-in`}>
+                <div className="flex items-center space-x-2 mb-2">
+                    <SparklesIcon className="w-5 h-5 text-brand-teal" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-teal">Venti's Daily Insight</span>
+                </div>
+                {isInsightLoading ? (
+                    <div className="h-6 w-3/4 bg-slate-400/20 animate-pulse rounded"></div>
+                ) : (
+                    <p className={`italic font-serif ${textColor} leading-relaxed`}>"{dailyInsight}"</p>
+                )}
+            </Card>
 
             <Card>
                 <div className="flex justify-between items-center">
@@ -196,46 +211,44 @@ const HomeScreen: React.FC = () => {
             </Card>
             
             <Card>
-                <h3 className={`font-bold ${textColor} text-lg`}>How are you feeling right now?</h3>
+                <h3 className={`font-bold ${textColor} text-lg`}>Mood Check-in</h3>
                  <div className="flex items-center space-x-2 sm:space-x-4 my-2">
                     <span className="text-2xl">😔</span>
-                    <input type="range" min="1" max="10" value={mood} onChange={(e) => setMood(Number(e.target.value))} className="w-full"/>
+                    <input type="range" min="1" max="10" value={mood} onChange={(e) => setMood(Number(e.target.value))} className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-teal"/>
                     <span className="text-2xl">🙂</span>
                 </div>
                 <button onClick={addMoodEntry} className={`mt-2 w-full font-bold py-2 px-4 rounded-lg transition-colors ${secondaryButtonClass}`}>
-                    Log My Mood
+                    Log Mood
                 </button>
             </Card>
             
             <Card>
                 <h3 className={`font-bold ${textColor} text-lg`}>🌱 Bridge to the World</h3>
-                <p className={`${subTextColor} my-2 text-sm`}>Healing involves reconnecting. Try this small step today.</p>
-                <div className={`p-3 rounded-lg flex justify-between items-center ${isDawn ? 'bg-slate-50' : 'bg-slate-900/40'}`}>
-                    <p className={`font-medium ${textColor}`}>{dailyBridgeAction.text}</p>
-                    <button onClick={() => showFeedback("Great step forward!")} className={`px-3 py-1 rounded-full font-semibold shadow-sm border ${isDawn ? 'bg-white text-dawn-primary border-slate-200' : 'bg-slate-700/80 text-dusk-primary border-slate-600'}`}>
-                        I did it!
+                <div className={`mt-3 p-3 rounded-lg flex justify-between items-center ${isDawn ? 'bg-slate-50' : 'bg-slate-900/40'}`}>
+                    <p className={`font-medium ${textColor} flex-1 mr-4`}>{dailyBridgeAction.text}</p>
+                    <button onClick={() => showFeedback("Great step forward!")} className={`px-4 py-1.5 rounded-full font-semibold shadow-sm border ${isDawn ? 'bg-white text-dawn-primary border-slate-200' : 'bg-slate-700/80 text-dusk-primary border-slate-600'}`}>
+                        Done
                     </button>
                 </div>
             </Card>
 
             <Card>
-                <h3 className={`font-bold ${textColor} text-lg`}>My Progress</h3>
-                <p className={`text-sm ${subTextColor} mb-3`}>Consistency is key. Celebrate every step.</p>
+                <h3 className={`font-bold ${textColor} text-lg mb-3`}>My Progress</h3>
                 <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
-                        <p className="text-3xl">🔥</p>
+                        <p className="text-2xl mb-1">🔥</p>
                         <p className={`font-bold text-xl ${textColor}`}>{userData.streaks.noContact}</p>
-                        <p className={`text-xs ${subTextColor}`}>Day{userData.streaks.noContact !== 1 && 's'} No Contact</p>
+                        <p className={`text-[10px] uppercase tracking-tighter ${subTextColor}`}>No Contact</p>
                     </div>
                     <div>
-                        <p className="text-3xl">📖</p>
+                        <p className="text-2xl mb-1">📖</p>
                         <p className={`font-bold text-xl ${textColor}`}>{userData.streaks.journaling}</p>
-                        <p className={`text-xs ${subTextColor}`}>Day{userData.streaks.journaling !== 1 && 's'} Journaling</p>
+                        <p className={`text-[10px] uppercase tracking-tighter ${subTextColor}`}>Journaling</p>
                     </div>
                     <div>
-                        <p className="text-3xl">❤️</p>
+                        <p className="text-2xl mb-1">❤️</p>
                         <p className={`font-bold text-xl ${textColor}`}>{userData.streaks.selfCare}</p>
-                        <p className={`text-xs ${subTextColor}`}>Day{userData.streaks.selfCare !== 1 && 's'} Self-Care</p>
+                        <p className={`text-[10px] uppercase tracking-tighter ${subTextColor}`}>Self-Care</p>
                     </div>
                 </div>
             </Card>
