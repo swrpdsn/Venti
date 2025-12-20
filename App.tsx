@@ -36,6 +36,9 @@ export const initialUserProfile: Omit<UserProfile, 'id'> = {
   is_premium: false,
   role: 'user',
   onboardingComplete: false,
+  age: undefined,
+  sex: '',
+  location: '',
   breakupContext: { role: '', initiator: '', reason: '', redFlags: '', feelings: [] },
   exName: '',
   shieldList: ['', '', '', '', ''],
@@ -84,18 +87,24 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
   const handleUserSession = async (user: User) => {
     try {
         setLoading(true);
+        // --- 1. Fetch Profile ---
         let { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .maybeSingle();
 
+        if (profileError) {
+          console.error("Profile Fetch Error:", profileError.message);
+          throw profileError;
+        }
+
+        // --- 2. Create Profile if missing ---
         if (!profile) {
             const anonName = generateRandomName();
-            const { role, ...profileDefaults } = initialUserProfile;
             const newProfileData = {
                 id: user.id,
-                ...profileDefaults,
+                ...initialUserProfile,
                 anonymous_name: anonName,
                 name: anonName, // Default display name is the anon name
             };
@@ -106,22 +115,33 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
                 .select()
                 .single();
 
-            if (insertError) throw insertError;
+            if (insertError) {
+              console.error("Profile Creation Error:", insertError.message);
+              throw insertError;
+            }
             profile = insertedProfile;
         }
 
-        const safeFetch = async (query: any) => {
+        // --- 3. Safe Auxiliary Fetch ---
+        const safeFetch = async (query: any, label: string) => {
             try {
                 const { data, error } = await query;
-                return error ? [] : (data || []);
-            } catch { return []; }
+                if (error) {
+                    console.warn(`Data Fetch Issue (${label}):`, error.message);
+                    return [];
+                }
+                return data || [];
+            } catch (err) {
+                console.warn(`Catch Fetch Issue (${label}):`, err);
+                return [];
+            }
         };
 
         const [journal, moods, stories, chats] = await Promise.all([
-            safeFetch(supabase.from('journal_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false })),
-            safeFetch(supabase.from('moods').select('*').eq('user_id', user.id).order('date', { ascending: false })),
-            safeFetch(supabase.from('my_stories').select('*').eq('user_id', user.id).order('updated_at', { ascending: false })),
-            safeFetch(supabase.from('chat_history').select('*').eq('user_id', user.id).order('created_at', { ascending: true }))
+            safeFetch(supabase.from('journal_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false }), 'Journal'),
+            safeFetch(supabase.from('moods').select('*').eq('user_id', user.id).order('date', { ascending: false }), 'Moods'),
+            safeFetch(supabase.from('my_stories').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }), 'Stories'),
+            safeFetch(supabase.from('chat_history').select('*').eq('user_id', user.id).order('created_at', { ascending: true }), 'Chat')
         ]);
 
         setUserData({
@@ -133,7 +153,9 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
         });
 
     } catch (error: any) {
-        console.error("Session Setup Error:", error);
+        // Log readable error message instead of [object Object]
+        const errorMsg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
+        console.error("Session Setup Error Detail:", errorMsg);
     } finally {
         setLoading(false);
     }
