@@ -1,21 +1,16 @@
+// This file contains only shared types with no external dependencies,
+// making it safe for import in both the browser and Deno environments (Supabase Edge Functions).
 
-// This file contains only shared types with no external dependencies
 export type Screen = 'home' | 'journal' | 'chat' | 'programs' | 'sos' | 'more' | 'community-group-simulation' | 'community-stories' | 'my-stories' | 'story-editor' | 'learn' | 'admin-dashboard';
 export type Program = 'healing' | 'glow-up' | 'no-contact';
 
+// This represents the data stored in the 'profiles' table
 export interface UserProfile {
-  id: string;
-  name: string; // This will be the "Display Name"
-  anonymous_name: string; // The system-generated random name
-  is_premium: boolean;
+  id: string; // Corresponds to auth.users.id
+  name: string;
   role: 'user' | 'admin' | 'superadmin';
   onboardingComplete: boolean;
-  
-  // Sensitive demographic data (Hidden by default for non-premium)
-  age?: number;
-  sex?: string;
-  location?: string;
-
+  anonymous_display_name: string | null;
   breakupContext: {
     role: 'dumpee' | 'dumper' | 'mutual' | '';
     initiator: 'me' | 'them' | 'mutual' | '';
@@ -45,6 +40,7 @@ export interface UserProfile {
   };
 }
 
+// This is the composite object used in the React context, assembled from multiple tables
 export interface UserData extends UserProfile {
   journalEntries: JournalEntry[];
   myStories: MyStory[];
@@ -52,8 +48,9 @@ export interface UserData extends UserProfile {
   chatHistory: ChatMessage[];
 }
 
+
 export interface JournalEntry {
-  id: number;
+  id: number; // Primary key from DB
   user_id: string;
   created_at: string;
   prompt?: string;
@@ -62,7 +59,7 @@ export interface JournalEntry {
 }
 
 export interface MyStory {
-  id: number;
+  id: number; // Primary key from DB
   user_id: string;
   created_at: string;
   updated_at: string;
@@ -71,15 +68,15 @@ export interface MyStory {
 }
 
 export interface MoodEntry {
-  id: number;
+  id: number; // Primary key from DB
   user_id: string;
   created_at: string; 
-  date: string;
+  date: string; // YYYY-MM-DD
   mood: number;
 }
 
 export interface ChatMessage {
-  id?: number;
+  id?: number; // Primary key from DB
   user_id: string;
   created_at?: string;
   role: 'user' | 'model';
@@ -88,6 +85,6 @@ export interface ChatMessage {
 
 export interface CommunityGroupSimulationMessage {
   id: number;
-  name: string;
+  name: string; // 'Liam', 'Chloe', 'Maya', etc.
   text: string;
 }

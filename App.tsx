@@ -18,27 +18,13 @@ import MyStoriesScreen from './screens/MyStoriesScreen';
 import StoryEditorScreen from './screens/StoryEditorScreen';
 import AuthScreen from './screens/AuthScreen';
 import LoadingScreen from './components/Loading';
-import AdminDashboardScreen from './screens/AdminDashboardScreen';
-import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon, ShieldIcon } from './components/Icons';
-
-const adjectives = ["Gentle", "Silent", "Brave", "Quiet", "Bright", "Steady", "Soft", "Kind", "Strong", "Wild"];
-const nouns = ["Breeze", "Echo", "River", "Stone", "Star", "Cloud", "Shadow", "Flame", "Forest", "Willow"];
-
-const generateRandomName = () => {
-  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
-  const noun = nouns[Math.floor(Math.random() * nouns.length)];
-  return `${adj} ${noun}`;
-};
+import { HomeIcon, JournalIcon, ChatIcon, ProgramsIcon, MoreIcon, SOSIcon, ChevronLeftIcon } from './components/Icons';
 
 export const initialUserProfile: Omit<UserProfile, 'id'> = {
   name: '',
-  anonymous_name: '',
-  is_premium: false,
   role: 'user',
   onboardingComplete: false,
-  age: undefined,
-  sex: '',
-  location: '',
+  anonymous_display_name: null,
   breakupContext: { role: '', initiator: '', reason: '', redFlags: '', feelings: [] },
   exName: '',
   shieldList: ['', '', '', '', ''],
@@ -68,7 +54,7 @@ export interface AppContextType {
 
 export const AppContext = createContext<AppContextType | null>(null);
 
-const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
+const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -85,28 +71,26 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
   }, []);
 
   const handleUserSession = async (user: User) => {
+    setLoading(true);
     try {
-        setLoading(true);
-        // --- 1. Fetch Profile ---
+        // --- 1. Fetch Profile (Critical) ---
         let { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', user.id)
             .maybeSingle();
 
-        if (profileError) {
-          console.error("Profile Fetch Error:", profileError.message);
-          throw profileError;
+        if (profileError && !profileError.message.includes('fetch')) {
+            throw profileError;
         }
-
+        
         // --- 2. Create Profile if missing ---
         if (!profile) {
-            const anonName = generateRandomName();
+            const { role, ...profileDefaults } = initialUserProfile;
             const newProfileData = {
                 id: user.id,
-                ...initialUserProfile,
-                anonymous_name: anonName,
-                name: anonName, // Default display name is the anon name
+                ...profileDefaults,
+                name: user.email?.split('@')[0] || 'Friend',
             };
 
             const { data: insertedProfile, error: insertError } = await supabase
@@ -116,32 +100,28 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
                 .single();
 
             if (insertError) {
-              console.error("Profile Creation Error:", insertError.message);
-              throw insertError;
+              profile = { ...newProfileData, id: user.id } as any;
+            } else {
+              profile = insertedProfile;
             }
-            profile = insertedProfile;
         }
 
-        // --- 3. Safe Auxiliary Fetch ---
-        const safeFetch = async (query: any, label: string) => {
+        // --- 3. Safe Loading for other data ---
+        const safeFetch = async (query: any) => {
             try {
                 const { data, error } = await query;
-                if (error) {
-                    console.warn(`Data Fetch Issue (${label}):`, error.message);
-                    return [];
-                }
+                if (error) return [];
                 return data || [];
-            } catch (err) {
-                console.warn(`Catch Fetch Issue (${label}):`, err);
+            } catch (e) {
                 return [];
             }
         };
 
         const [journal, moods, stories, chats] = await Promise.all([
-            safeFetch(supabase.from('journal_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false }), 'Journal'),
-            safeFetch(supabase.from('moods').select('*').eq('user_id', user.id).order('date', { ascending: false }), 'Moods'),
-            safeFetch(supabase.from('my_stories').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }), 'Stories'),
-            safeFetch(supabase.from('chat_history').select('*').eq('user_id', user.id).order('created_at', { ascending: true }), 'Chat')
+            safeFetch(supabase.from('journal_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false })),
+            safeFetch(supabase.from('moods').select('*').eq('user_id', user.id).order('date', { ascending: false })),
+            safeFetch(supabase.from('my_stories').select('*').eq('user_id', user.id).order('updated_at', { ascending: false })),
+            safeFetch(supabase.from('chat_history').select('*').eq('user_id', user.id).order('created_at', { ascending: true }))
         ]);
 
         setUserData({
@@ -153,20 +133,20 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
         });
 
     } catch (error: any) {
-        // Log readable error message instead of [object Object]
-        const errorMsg = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
-        console.error("Session Setup Error Detail:", errorMsg);
+        console.error("Session Setup Error:", error);
     } finally {
         setLoading(false);
     }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-        setSession(initialSession);
-        if (initialSession?.user) handleUserSession(initialSession.user);
+    const init = async () => {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
+        if (currentSession?.user) await handleUserSession(currentSession.user);
         else setLoading(false);
-    });
+    };
+    init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
         setSession(currentSession);
@@ -233,7 +213,6 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
       case 'community-stories': return <CommunityStoriesScreen />;
       case 'my-stories': return <MyStoriesScreen />;
       case 'story-editor': return <StoryEditorScreen />;
-      case 'admin-dashboard': return <AdminDashboardScreen />;
       default: return <HomeScreen />;
     }
   };
@@ -244,7 +223,7 @@ const App: React.FC<{ adminMode?: boolean }> = ({ adminMode = false }) => {
         {showSOS && <SOSScreen />}
         <Header />
         <main className="flex-1 overflow-y-auto p-4 pb-20">
-          {userData?.role === 'admin' && adminMode ? <AdminDashboardScreen /> : renderScreen()}
+          {renderScreen()}
         </main>
         <BottomNav />
       </div>
@@ -256,7 +235,7 @@ const Header: React.FC = () => {
   const context = React.useContext(AppContext);
   if (!context) return null;
   const { setShowSOS, goBack, activeScreen } = context;
-  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more', 'admin-dashboard'].includes(activeScreen);
+  const isTabScreen = ['home', 'journal', 'chat', 'programs', 'learn', 'more'].includes(activeScreen);
   const isDawn = document.documentElement.classList.contains('theme-dawn');
   const textColor = isDawn ? 'text-dawn-text' : 'text-dusk-text';
 
@@ -285,7 +264,7 @@ const Header: React.FC = () => {
 const BottomNav: React.FC = () => {
   const context = React.useContext(AppContext);
   if (!context) return null;
-  const { activeScreen, resetToScreen, userData } = context;
+  const { activeScreen, resetToScreen } = context;
   const isDawn = document.documentElement.classList.contains('theme-dawn');
 
   const navItems = [
@@ -295,10 +274,6 @@ const BottomNav: React.FC = () => {
     { screen: 'programs' as Screen, label: 'Program', icon: ProgramsIcon },
     { screen: 'more' as Screen, label: 'More', icon: MoreIcon },
   ];
-
-  if (userData?.role === 'admin' || userData?.role === 'superadmin') {
-      navItems.splice(4, 0, { screen: 'admin-dashboard' as Screen, label: 'Admin', icon: ShieldIcon });
-  }
 
   return (
     <nav className={`fixed bottom-0 left-0 right-0 border-t backdrop-blur-md flex justify-around p-2 z-10 ${isDawn ? 'bg-white/80 border-slate-200' : 'bg-slate-900/80 border-slate-700'}`}>

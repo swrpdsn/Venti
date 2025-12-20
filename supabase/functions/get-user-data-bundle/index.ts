@@ -12,13 +12,11 @@ declare const Deno: {
 };
 
 // Copied from App.tsx to make the function self-contained
-// Fix: updated initialUserProfile to match UserProfile type definition from types.ts
 export const initialUserProfile: Omit<UserProfile, 'id'> = {
   name: '',
-  anonymous_name: '',
-  is_premium: false,
   role: 'user',
   onboardingComplete: false,
+  anonymous_display_name: null,
   breakupContext: { role: '', initiator: '', reason: '', redFlags: '', feelings: [] },
   exName: '',
   shieldList: ['', '', '', '', ''],
